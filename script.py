@@ -1,11 +1,12 @@
 import requests
 import json
 import pandas as pd
+import os
 
-ACCESS_TOKEN = "INSERISCI_IL_TUO_ACCESS_TOKEN"
-IG_USER_ID = "INSERISCI_IL_TUO_IG_BUSINESS_ACCOUNT_ID"
 API_VERSION = "v21.0"
 BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+IG_USER_ID = os.getenv("IG_USER_ID")
 
 def get_instagram_posts(user_id, token, limit=10):
     """Recupera la lista dei post recenti con i dati base."""
