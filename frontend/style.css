@@ -198,3 +198,88 @@ body::before { display: none; }
   .calendar-event { font-size: 9px; }
   .calendar-weekdays span { padding: 7px 4px; font-size: 9px; }
 }
+
+/* Work-tool finish: compact, neutral, and task-first. */
+:root {
+  --bg: #f7f8fa;
+  --bg-soft: #ffffff;
+  --line: #e1e5ea;
+  --line-strong: #c2c9d1;
+  --ink: #20262e;
+  --muted: #66717d;
+  --muted-dark: #87919b;
+  --coral: #2563eb;
+  --coral-dark: #1d4ed8;
+  --mint: #176b55;
+  --teal: #0f766e;
+  --amber: #a16207;
+  --danger: #b42318;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05);
+}
+body { background: var(--bg); color: var(--ink); font-family: 'Manrope', sans-serif; }
+.auth-bar { min-height: 56px; padding: 8px 28px; background: #20262e; }
+.auth-bar .btn { min-height: 34px; padding: 7px 12px; }
+.sidebar { flex-basis: 224px; width: 224px; padding: 22px 12px 18px; }
+.brand { padding: 0 10px; }
+.brand-mark { width: 32px; height: 32px; border-radius: 6px; background: #20262e; font-size: 14px; }
+.brand h2 { font-size: 15px; letter-spacing: .04em; }
+.badge { font-size: 9px; }
+.nav { margin-top: 32px; }
+.nav-btn { border-radius: 6px; padding: 10px 11px; font-size: 12px; }
+.nav-btn.active { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.nav-btn.active::before { background: #2563eb; box-shadow: 0 0 0 3px #dbeafe; }
+.main-content { padding: 32px clamp(20px, 4vw, 56px) 64px; }
+.view { max-width: 1180px; }
+.section-header { align-items: center; margin-bottom: 24px; }
+.section-header h1 { max-width: 680px; font-size: clamp(28px, 3vw, 40px); font-weight: 750; letter-spacing: -.035em; line-height: 1.12; }
+.section-header p:not(.eyebrow) { max-width: 620px; margin-top: 10px; font-size: 13px; }
+.eyebrow { margin-bottom: 8px; color: #2563eb; font-size: 9px; }
+.btn { min-height: 38px; border-radius: 6px; padding: 9px 13px; font-size: 12px; }
+.btn-primary { border-color: #2563eb; background: #2563eb; box-shadow: none; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-secondary { border-color: #b8c1cb; background: #ffffff; color: #34404c; }
+.btn-secondary:hover { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+.today-grid, .home-columns, .workspace-grid, .charts-grid { gap: 12px; }
+.today-grid { margin-bottom: 30px; }
+.today-card, .panel, .opportunity-card, .copy-card, .chart-card, .kpi-card { border-radius: 7px; box-shadow: var(--shadow); }
+.today-card { min-height: 164px; padding: 18px; }
+.today-focus { border-color: #bfdbfe; background: #eff6ff; }
+.today-card h2 { margin: 7px 0 9px; font-size: 22px; }
+.today-card strong { margin: 14px 0 0; font-size: 31px; }
+.home-columns { gap: 36px; }
+.section-line { margin-bottom: 12px; }
+.section-line h2, .panel h2, .results-heading h2 { font-size: 17px; letter-spacing: -.02em; }
+.opportunity-card { padding: 16px; }
+.opportunity-card h3 { margin: 13px 0 5px; font-size: 15px; }
+.content-row { padding: 12px 0; }
+.content-row h3 { margin: 3px 0; font-size: 13px; }
+.panel { padding: 18px; }
+.calendar-planner { margin-bottom: 22px; }
+.calendar-shell { padding: 14px; }
+.calendar-toolbar { margin-bottom: 12px; }
+.calendar-toolbar h2 { font-size: 17px; }
+.calendar-day { min-height: 88px; padding: 8px; }
+.calendar-day strong { width: 24px; height: 24px; font-size: 11px; }
+.calendar-event { border-left-width: 2px; padding: 3px 5px; font-size: 9px; }
+.schedule-form input[type="text"], .schedule-form input[type="datetime-local"], .schedule-form textarea, .schedule-form select { border-radius: 6px; padding: 9px 10px; font-size: 12px; }
+.dropzone { min-height: 230px; border-width: 1px; border-radius: 7px; }
+.kpi-card { padding: 15px; }
+.kpi-value { font-size: 25px; }
+.chart-card { min-height: 270px; padding: 16px; }
+.empty-state { border-radius: 7px; padding: 14px; }
+
+@media (max-width: 900px) {
+  .sidebar { flex-basis: 196px; width: 196px; }
+  .main-content { padding-inline: 24px; }
+}
+
+@media (max-width: 640px) {
+  .auth-bar { padding: 8px 14px; }
+  .sidebar { padding: 14px; }
+  .nav { margin-top: 22px; }
+  .main-content { padding: 24px 14px 48px; }
+  .section-header { margin-bottom: 20px; }
+  .section-header h1 { font-size: 30px; }
+  .today-card { min-height: 150px; }
+  .calendar-day { min-height: 64px; padding: 5px; }
+}
