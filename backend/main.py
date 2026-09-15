@@ -2,7 +2,7 @@ import requests
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from backend.config import BASE_DIR, STORAGE_DIR
 from backend.models import AnalyticsSummary, AssetRecord, CalendarEventRequest, CalendarEventResponse, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, Opportunity
@@ -24,6 +24,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health", include_in_schema=False)
+def health_check():
+    return {"status": "ok"}
+
+
+@app.get("/api", include_in_schema=False)
+def api_health_check():
+    return JSONResponse({"status": "ok", "service": "moment-api"})
 
 
 @app.get("/api/analytics", response_model=AnalyticsSummary)
