@@ -300,3 +300,34 @@ body { background: var(--bg); color: var(--ink); font-family: 'Manrope', sans-se
   .account-actions { width: 100%; flex-wrap: wrap; }
   .workspace-context { max-width: 100%; }
 }
+
+/* Compact top navigation used by calendar and project-management tools. */
+.layout { display: block; min-height: auto; }
+.sidebar { position: static; display: flex; width: 100%; height: auto; min-height: 64px; flex-direction: row; align-items: center; padding: 10px 28px; border-right: 0; border-bottom: 1px solid var(--line); }
+.brand { flex: 0 0 auto; }
+.nav { flex: 1; flex-direction: row; gap: 4px; margin: 0 0 0 34px; }
+.nav-btn { flex: 0 0 auto; padding: 9px 12px; }
+.sidebar-footer { flex: 0 0 auto; margin-left: auto; border-top: 0; border-left: 1px solid var(--line); padding: 7px 0 7px 20px; }
+.main-content { min-height: calc(100vh - 120px); }
+.btn-danger { border: 1px solid #efb4ad; background: #fff4f2; color: #a33e31; }
+.btn-danger:hover { border-color: #d85f45; background: #ffe5df; color: #8f2f24; }
+.btn-danger:disabled { cursor: not-allowed; opacity: .45; }
+.calendar-event-row { display: flex; align-items: center; width: 100%; gap: 4px; }
+.calendar-event-row input { flex: 0 0 auto; accent-color: var(--coral); }
+.calendar-event-row .calendar-event { min-width: 0; flex: 1; }
+
+@media (max-width: 900px) {
+  .sidebar { padding-inline: 18px; }
+  .nav { margin-left: 18px; }
+  .sidebar-footer { display: none; }
+}
+
+@media (max-width: 640px) {
+  .sidebar { display: block; padding: 12px 14px 8px; }
+  .brand { margin-bottom: 10px; }
+  .nav { margin: 0; overflow-x: auto; }
+  .main-content { min-height: calc(100vh - 150px); }
+  .calendar-toolbar { flex-wrap: wrap; }
+  .calendar-today { margin-left: 0; }
+  #calendar-delete-selected { margin-left: auto; }
+}

@@ -91,6 +91,9 @@ class CalendarEventResponse(BaseModel):
     id: str
     html_link: Optional[str] = None
 
+class CalendarBulkDeleteRequest(BaseModel):
+    event_ids: List[str]
+
 class GoogleTokenRequest(BaseModel):
     access_token: str
     refresh_token: str = ""

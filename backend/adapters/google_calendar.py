@@ -116,6 +116,14 @@ def delete_event(user_id: str, event_id: str) -> None:
         raise RuntimeError(f"Google Calendar non ha potuto eliminare l'evento: {detail}")
 
 
+def delete_events(user_id: str, event_ids: list[str]) -> int:
+    if not event_ids or len(event_ids) > 100:
+        raise RuntimeError("Seleziona da 1 a 100 eventi da eliminare.")
+    for event_id in event_ids:
+        delete_event(user_id, event_id)
+    return len(event_ids)
+
+
 def list_events(user_id: str, time_min: str, time_max: str) -> list[dict]:
     response = requests.get(CALENDAR_URL, headers={"Authorization": f"Bearer {_access_token(user_id)}"}, params={"timeMin": time_min, "timeMax": time_max, "singleEvents": "true", "orderBy": "startTime"}, timeout=30)
     if response.status_code >= 400:
