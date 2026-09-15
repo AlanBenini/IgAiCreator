@@ -45,7 +45,12 @@ def api_health_check():
 
 @app.get("/api/config", include_in_schema=False)
 def frontend_config():
-    return {"supabase_url": SUPABASE_URL, "supabase_anon_key": SUPABASE_ANON_KEY}
+    return {
+        "supabase_url": SUPABASE_URL,
+        "supabase_anon_key": SUPABASE_ANON_KEY,
+        "meta_app_id": META_APP_ID,
+        "meta_redirect_uri": META_REDIRECT_URI,
+    }
 
 
 def _encode_state(user_id: str) -> str:
