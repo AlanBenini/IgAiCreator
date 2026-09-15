@@ -17,6 +17,7 @@ for d in [STORAGE_DIR, MEDIA_DIR, EXPORTS_DIR]:
 USE_MOCK = os.getenv("USE_MOCK", "True").lower() in ("true", "1", "yes")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 # Le chiavi vuote sono valide in modalità mock.
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "").strip().strip('"')
 IG_USER_ID = os.getenv("IG_USER_ID", "").strip().strip('"')
@@ -37,6 +38,13 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip().strip('"')
 VERCEL_HOST = os.getenv("VERCEL_PROJECT_PRODUCTION_URL") or os.getenv("VERCEL_URL", "")
 VERCEL_BASE_URL = f"https://{VERCEL_HOST}" if VERCEL_HOST else ""
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", VERCEL_BASE_URL).strip().rstrip("/")
+META_APP_ID = os.getenv("META_APP_ID", "").strip()
+META_APP_SECRET = os.getenv("META_APP_SECRET", "").strip()
+META_REDIRECT_URI = os.getenv(
+	"META_REDIRECT_URI",
+	f"{PUBLIC_BASE_URL}/api/auth/meta/callback" if PUBLIC_BASE_URL else "http://localhost:8000/api/auth/meta/callback",
+).strip().strip('"')
+SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()
 GOOGLE_REDIRECT_URI = os.getenv(
 	"GOOGLE_REDIRECT_URI",
 	f"{PUBLIC_BASE_URL}/api/calendar/callback" if PUBLIC_BASE_URL else "http://localhost:8000/api/calendar/callback",

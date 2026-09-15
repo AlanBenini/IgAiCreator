@@ -1,3 +1,10 @@
+import base64
+import hashlib
+import hmac
+import json
+import time
+from urllib.parse import urlencode
+
 import requests
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +19,7 @@ from backend.services.copywriter import generate_copies
 from backend.services.content import create_draft, list_drafts, update_status
 from backend.services.radar import build_opportunities
 from backend.adapters.instagram import publish_photo
-from backend.config import SUPABASE_ANON_KEY, SUPABASE_URL, USE_MOCK
+from backend.config import META_APP_ID, META_APP_SECRET, META_REDIRECT_URI, SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, USE_MOCK
 from backend.adapters.google_calendar import authorization_url, create_event, exchange_code
 
 app = FastAPI(title="Instagram Content Engine API", version="2.0.0")
@@ -39,6 +46,81 @@ def api_health_check():
 @app.get("/api/config", include_in_schema=False)
 def frontend_config():
     return {"supabase_url": SUPABASE_URL, "supabase_anon_key": SUPABASE_ANON_KEY}
+
+
+def _encode_state(user_id: str) -> str:
+    if not SESSION_SECRET:
+        raise HTTPException(status_code=503, detail="SESSION_SECRET non configurato.")
+    payload = json.dumps({"user_id": user_id, "exp": int(time.time()) + 600}, separators=(",", ":")).encode()
+    body = base64.urlsafe_b64encode(payload).decode().rstrip("=")
+    signature = hmac.new(SESSION_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{signature}"
+
+
+def _decode_state(state: str) -> str:
+    try:
+        body, signature = state.split(".", 1)
+        expected = hmac.new(SESSION_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError
+        padding = "=" * (-len(body) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(f"{body}{padding}"))
+        if payload["exp"] < time.time():
+            raise ValueError
+        return payload["user_id"]
+    except (ValueError, KeyError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="Stato OAuth non valido o scaduto.") from None
+
+
+def _supabase_user(request: Request) -> str:
+    authorization = request.headers.get("authorization", "")
+    if not authorization.lower().startswith("bearer ") or not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(status_code=401, detail="Accedi prima con Google.")
+    response = requests.get(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={"apikey": SUPABASE_ANON_KEY, "Authorization": authorization},
+        timeout=15,
+    )
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Sessione non valida.")
+    return response.json()["id"]
+
+
+def _save_meta_connection(user_id: str, page: dict, instagram_id: str) -> None:
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=503, detail="Configura SUPABASE_SERVICE_ROLE_KEY su Vercel.")
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/meta_connections",
+        headers={"apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"},
+        json={"user_id": user_id, "page_id": page["id"], "page_name": page.get("name", ""), "page_access_token": page["access_token"], "instagram_user_id": instagram_id},
+        timeout=20,
+    )
+    if response.status_code not in {200, 201}:
+        raise HTTPException(status_code=502, detail="Impossibile salvare il collegamento Meta su Supabase.")
+
+
+@app.get("/api/auth/meta/start")
+def meta_auth_start(request: Request):
+    user_id = _supabase_user(request)
+    if not META_APP_ID or not META_APP_SECRET:
+        raise HTTPException(status_code=503, detail="Configura META_APP_ID e META_APP_SECRET su Vercel.")
+    params = {"client_id": META_APP_ID, "redirect_uri": META_REDIRECT_URI, "state": _encode_state(user_id), "response_type": "code", "scope": "pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish"}
+    return {"url": f"https://www.facebook.com/v21.0/dialog/oauth?{urlencode(params)}"}
+
+
+@app.get("/api/auth/meta/callback")
+def meta_auth_callback(code: str = Query(...), state: str = Query(...)):
+    user_id = _decode_state(state)
+    token_response = requests.get("https://graph.facebook.com/v21.0/oauth/access_token", params={"client_id": META_APP_ID, "client_secret": META_APP_SECRET, "redirect_uri": META_REDIRECT_URI, "code": code}, timeout=30)
+    token_response.raise_for_status()
+    token = token_response.json()["access_token"]
+    accounts = requests.get("https://graph.facebook.com/v21.0/me/accounts", params={"fields": "id,name,access_token,instagram_business_account", "access_token": token}, timeout=30)
+    accounts.raise_for_status()
+    instagram = next((item for item in accounts.json().get("data", []) if item.get("instagram_business_account")), None)
+    if not instagram:
+        raise HTTPException(status_code=400, detail="Nessun account Instagram Business/Creator collegato alla pagina Facebook.")
+    _save_meta_connection(user_id, instagram, instagram["instagram_business_account"]["id"])
+    return RedirectResponse(url="/?meta=connected", status_code=303)
 
 
 @app.get("/api/analytics", response_model=AnalyticsSummary)
