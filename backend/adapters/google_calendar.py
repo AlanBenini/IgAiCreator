@@ -124,6 +124,25 @@ def delete_events(user_id: str, event_ids: list[str]) -> int:
     return len(event_ids)
 
 
+def update_event(user_id: str, event_id: str, title: str, description: str, start: str, end: str) -> dict:
+    body = {
+        "summary": title,
+        "description": description,
+        "start": {"dateTime": start, "timeZone": "Europe/Rome"},
+        "end": {"dateTime": end, "timeZone": "Europe/Rome"},
+    }
+    response = requests.patch(
+        f"{CALENDAR_URL}/{event_id}",
+        headers={"Authorization": f"Bearer {_access_token(user_id)}", "Content-Type": "application/json"},
+        json=body,
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        detail = response.json().get("error", {}).get("message", response.text[:300])
+        raise RuntimeError(f"Google Calendar non ha potuto modificare l'evento: {detail}")
+    return response.json()
+
+
 def list_events(user_id: str, time_min: str, time_max: str) -> list[dict]:
     response = requests.get(CALENDAR_URL, headers={"Authorization": f"Bearer {_access_token(user_id)}"}, params={"timeMin": time_min, "timeMax": time_max, "singleEvents": "true", "orderBy": "startTime"}, timeout=30)
     if response.status_code >= 400:
