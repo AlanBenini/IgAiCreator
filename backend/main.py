@@ -20,7 +20,7 @@ from backend.services.content import create_draft, list_drafts, update_status
 from backend.services.radar import build_opportunities
 from backend.adapters.instagram import publish_photo
 from backend.config import META_APP_ID, META_APP_SECRET, META_REDIRECT_URI, SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, USE_MOCK
-from backend.adapters.google_calendar import create_event, create_recurring_event, has_connection, list_events, save_provider_token
+from backend.adapters.google_calendar import create_event, create_recurring_event, delete_event, has_connection, list_events, save_provider_token
 
 app = FastAPI(title="Instagram Content Engine API", version="2.0.0")
 
@@ -249,6 +249,16 @@ def get_calendar_events(request: Request, start: str = Query(...), end: str = Qu
         return list_events(user_id, start, end)
     except (RuntimeError, requests.RequestException) as error:
         raise HTTPException(status_code=502, detail=f"Impossibile leggere il calendario: {error}") from error
+
+
+@app.delete("/api/calendar/events/{event_id}")
+def remove_calendar_event(event_id: str, request: Request):
+    user_id = _supabase_user(request)
+    try:
+        delete_event(user_id, event_id)
+    except (RuntimeError, requests.RequestException) as error:
+        raise HTTPException(status_code=502, detail=f"Impossibile eliminare l'evento: {error}") from error
+    return {"status": "deleted"}
 
 
 @app.get("/api/content", response_model=list[ContentDraft])

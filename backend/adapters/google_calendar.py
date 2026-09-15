@@ -105,6 +105,17 @@ def create_recurring_event(user_id: str, title: str, description: str, start: st
     return response.json()
 
 
+def delete_event(user_id: str, event_id: str) -> None:
+    response = requests.delete(
+        f"{CALENDAR_URL}/{event_id}",
+        headers={"Authorization": f"Bearer {_access_token(user_id)}"},
+        timeout=30,
+    )
+    if response.status_code not in {200, 204}:
+        detail = response.json().get("error", {}).get("message", response.text[:300])
+        raise RuntimeError(f"Google Calendar non ha potuto eliminare l'evento: {detail}")
+
+
 def list_events(user_id: str, time_min: str, time_max: str) -> list[dict]:
     response = requests.get(CALENDAR_URL, headers={"Authorization": f"Bearer {_access_token(user_id)}"}, params={"timeMin": time_min, "timeMax": time_max, "singleEvents": "true", "orderBy": "startTime"}, timeout=30)
     if response.status_code >= 400:
