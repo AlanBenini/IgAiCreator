@@ -130,7 +130,13 @@ def meta_auth_start(request: Request):
     user_id = _supabase_user(request)
     if not META_APP_ID or not META_APP_SECRET:
         raise HTTPException(status_code=503, detail="Configura META_APP_ID e META_APP_SECRET su Vercel.")
-    params = {"client_id": META_APP_ID, "redirect_uri": META_REDIRECT_URI, "state": _encode_state(user_id), "response_type": "code", "scope": "pages_show_list,pages_read_engagement"}
+    params = {
+        "client_id": META_APP_ID,
+        "redirect_uri": META_REDIRECT_URI,
+        "state": _encode_state(user_id),
+        "response_type": "code",
+        "scope": "pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_basic,instagram_manage_insights,instagram_content_publish",
+    }
     return {"url": f"https://www.facebook.com/v21.0/dialog/oauth?{urlencode(params)}"}
 
 
@@ -140,11 +146,15 @@ def meta_auth_callback(code: str = Query(...), state: str = Query(...)):
     token_response = requests.get("https://graph.facebook.com/v21.0/oauth/access_token", params={"client_id": META_APP_ID, "client_secret": META_APP_SECRET, "redirect_uri": META_REDIRECT_URI, "code": code}, timeout=30)
     token_response.raise_for_status()
     token = token_response.json()["access_token"]
-    accounts = requests.get("https://graph.facebook.com/v21.0/me/accounts", params={"fields": "id,name,access_token,instagram_business_account", "access_token": token}, timeout=30)
-    accounts.raise_for_status()
+    accounts = requests.get("https://graph.facebook.com/v21.0/me/accounts", params={"fields": "id,name,access_token,tasks,instagram_business_account", "access_token": token}, timeout=30)
+    if accounts.status_code != 200:
+        detail = accounts.json().get("error", {}).get("message", accounts.text[:300])
+        raise HTTPException(status_code=502, detail=f"Meta non ha restituito le pagine: {detail}")
     pages = accounts.json().get("data", [])
     if not pages:
-        raise HTTPException(status_code=400, detail="Nessuna pagina Facebook trovata per questo account.")
+        me = requests.get("https://graph.facebook.com/v21.0/me", params={"fields": "id,name", "access_token": token}, timeout=30)
+        me_detail = me.json().get("error", {}).get("message", me.text[:300]) if me.status_code != 200 else "Meta non associa pagine gestibili a questo token."
+        raise HTTPException(status_code=400, detail=f"Meta non restituisce la pagina per l'account {me.json().get('name', 'selezionato')}: {me_detail} Verifica che questo profilo abbia accesso alla Pagina in Impostazioni Pagina > Accesso alla Pagina e che l'app abbia le permission pages_show_list e pages_read_engagement.")
     page = next((item for item in pages if item.get("name")), pages[0])
     instagram_id = _resolve_meta_instagram_id(page, page.get("access_token", token))
     if not instagram_id:
