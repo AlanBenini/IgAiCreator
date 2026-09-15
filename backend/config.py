@@ -15,6 +15,8 @@ for d in [STORAGE_DIR, MEDIA_DIR, EXPORTS_DIR]:
 	d.mkdir(parents=True, exist_ok=True)
 
 USE_MOCK = os.getenv("USE_MOCK", "True").lower() in ("true", "1", "yes")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
 # Le chiavi vuote sono valide in modalità mock.
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "").strip().strip('"')
 IG_USER_ID = os.getenv("IG_USER_ID", "").strip().strip('"')

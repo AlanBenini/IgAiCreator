@@ -27,6 +27,9 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
 
+.auth-bar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-height: 58px; border-bottom: 1px solid var(--line); padding: 10px 5vw; background: rgba(6, 19, 19, .72); color: var(--muted); font: 10px 'DM Mono', monospace; }
+.auth-bar .btn { min-height: 32px; padding: 7px 11px; }
+
 .layout { display: flex; min-height: 100vh; }
 .sidebar { position: sticky; top: 0; display: flex; flex: 0 0 244px; flex-direction: column; width: 244px; height: 100vh; padding: 28px 16px 20px; border-right: 1px solid var(--line); background: rgba(6, 19, 19, .72); backdrop-filter: blur(24px); }
 .brand { display: flex; align-items: center; gap: 11px; padding: 0 10px; }.brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(255,255,255,.22); border-radius: 12px; background: linear-gradient(145deg, var(--coral), #d95468); box-shadow: 0 8px 24px rgba(255, 128, 104, .22); color: white; font-size: 16px; font-weight: 800; }.brand h2 { color: var(--ink); font-size: 16px; letter-spacing: .08em; }.badge { display: block; margin-top: 1px; color: var(--muted); font: 10px 'DM Mono', monospace; letter-spacing: .04em; }

@@ -12,7 +12,7 @@ from backend.services.copywriter import generate_copies
 from backend.services.content import create_draft, list_drafts, update_status
 from backend.services.radar import build_opportunities
 from backend.adapters.instagram import publish_photo
-from backend.config import USE_MOCK
+from backend.config import SUPABASE_ANON_KEY, SUPABASE_URL, USE_MOCK
 from backend.adapters.google_calendar import authorization_url, create_event, exchange_code
 
 app = FastAPI(title="Instagram Content Engine API", version="2.0.0")
@@ -34,6 +34,11 @@ def health_check():
 @app.get("/api", include_in_schema=False)
 def api_health_check():
     return JSONResponse({"status": "ok", "service": "moment-api"})
+
+
+@app.get("/api/config", include_in_schema=False)
+def frontend_config():
+    return {"supabase_url": SUPABASE_URL, "supabase_anon_key": SUPABASE_ANON_KEY}
 
 
 @app.get("/api/analytics", response_model=AnalyticsSummary)

@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+  <div id="auth-bar" class="auth-bar"><span id="auth-status">Connessione in corso...</span><button id="login-google" class="btn btn-primary" type="button">Accedi con Google</button><button id="logout" class="btn btn-secondary hidden" type="button">Esci</button></div>
   <div class="layout">
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">M</span><div><h2>MOMENT</h2><span class="badge">AI content manager</span></div></div>
@@ -25,6 +26,7 @@
       <section id="view-performance" class="view"><header class="section-header"><div><p class="eyebrow">PERFORMANCE</p><h1>Cosa sta funzionando.</h1><p>Analytics Meta Graph API e diagnosi dei contenuti pubblicati.</p></div><button class="btn btn-secondary" id="refresh-analytics" type="button">Ricarica dati</button></header><div class="kpi-grid"><div class="kpi-card"><span class="kpi-label">Top Engagement Rate</span><span class="kpi-value" id="kpi-top-er">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Media ER</span><span class="kpi-value" id="kpi-avg-er">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Media salvataggi</span><span class="kpi-value" id="kpi-avg-save">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Reach totale</span><span class="kpi-value" id="kpi-reach">0</span></div></div><div class="charts-grid"><div class="chart-card"><h3>Engagement rate</h3><canvas id="chart-er"></canvas></div><div class="chart-card"><h3>Salvataggi vs conversazioni</h3><canvas id="chart-matrix"></canvas></div></div><div id="posts-container" class="posts-list"></div></section>
     </main>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="app.js"></script>
 </body>
 </html>

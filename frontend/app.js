@@ -1,7 +1,32 @@
 let erChartInstance = null;
 let matrixChartInstance = null;
 let selectedFiles = [];
+let supabaseClient = null;
 const $ = id => document.getElementById(id);
+
+async function initializeAuth() {
+  const response = await fetch('/api/config');
+  const config = await response.json();
+  if (!config.supabase_url || !config.supabase_anon_key || !window.supabase) {
+    $('auth-status').textContent = 'Login non configurato';
+    return;
+  }
+  supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  updateAuthUI(session);
+  supabaseClient.auth.onAuthStateChange((_event, nextSession) => updateAuthUI(nextSession));
+}
+function updateAuthUI(session) {
+  const user = session?.user;
+  $('auth-status').textContent = user ? `Connesso: ${user.email || 'account Google'}` : 'Accedi per usare il workspace';
+  $('login-google').classList.toggle('hidden', Boolean(user));
+  $('logout').classList.toggle('hidden', !user);
+}
+async function loginWithGoogle() {
+  if (!supabaseClient) return status('workspace-status', 'Configura Supabase su Vercel prima di accedere.', 'error');
+  await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+}
+async function logout() { if (supabaseClient) await supabaseClient.auth.signOut(); }
 
 function switchView(view) {
   document.querySelectorAll('.view').forEach(element => element.classList.toggle('active', element.id === `view-${view}`));
@@ -34,4 +59,6 @@ $('copy-form').addEventListener('submit', generateCopy);
 $('google-connect').addEventListener('click', connectGoogle);
 $('refresh-content').addEventListener('click', loadContent);
 $('refresh-analytics').addEventListener('click', loadAnalytics);
-window.addEventListener('DOMContentLoaded', loadHome);
+$('login-google').addEventListener('click', loginWithGoogle);
+$('logout').addEventListener('click', logout);
+window.addEventListener('DOMContentLoaded', async () => { await initializeAuth(); loadHome(); });
