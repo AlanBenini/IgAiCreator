@@ -235,8 +235,9 @@ def get_assets():
 
 @app.get("/api/opportunities", response_model=list[Opportunity])
 def get_opportunities(request: Request):
+    user_id = _supabase_user(request) if request.headers.get("authorization") else None
     try:
-        return build_opportunities(request.cookies.get("google_user"))
+        return build_opportunities(user_id)
     except requests.RequestException as error:
         raise HTTPException(status_code=502, detail=f"Impossibile leggere il calendario: {error}") from error
 
@@ -273,27 +274,28 @@ def publish_content(content_id: str, request: Request):
 
 
 @app.get("/api/calendar/auth")
-def calendar_auth():
+def calendar_auth(request: Request):
+    user_id = _supabase_user(request)
     try:
-        return {"url": authorization_url()}
+        return {"url": authorization_url(_encode_state(user_id))}
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @app.get("/api/calendar/callback")
-def calendar_callback(code: str = Query(...)):
+def calendar_callback(code: str = Query(...), state: str = Query(...)):
+    user_id = _decode_state(state)
     try:
-        user_id = exchange_code(code)
+        exchange_code(code, user_id)
     except requests.RequestException as error:
         raise HTTPException(status_code=502, detail=f"Autenticazione Google fallita: {error}") from error
     response = RedirectResponse(url="/?google=connected", status_code=303)
-    response.set_cookie("google_user", user_id, httponly=True, samesite="lax", max_age=2592000)
     return response
 
 
 @app.post("/api/calendar/events", response_model=CalendarEventResponse)
 def calendar_event(event: CalendarEventRequest, request: Request):
-    user_id = request.cookies.get("google_user")
+    user_id = _supabase_user(request)
     if not user_id:
         raise HTTPException(status_code=401, detail="Accedi prima con Google Calendar.")
     try:
