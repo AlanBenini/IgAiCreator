@@ -40,6 +40,14 @@ def exchange_code(code: str, user_id: str) -> None:
     _save_token(user_id, token)
 
 
+def save_provider_token(user_id: str, access_token: str, refresh_token: str = "") -> None:
+    _save_token(user_id, {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_at": int(time.time()) + 3600,
+    })
+
+
 def _access_token(user_id: str) -> str:
     response = requests.get(
         f"{SUPABASE_URL}/rest/v1/google_connections",

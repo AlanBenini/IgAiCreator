@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from backend.config import BASE_DIR, STORAGE_DIR
-from backend.models import AnalyticsSummary, AssetRecord, CalendarEventRequest, CalendarEventResponse, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, Opportunity
+from backend.models import AnalyticsSummary, AssetRecord, CalendarEventRequest, CalendarEventResponse, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, GoogleTokenRequest, Opportunity
 from backend.services.assets import asset_public_url, list_assets, save_uploads
 from backend.services.analytics import calculate_analytics
 from backend.services.copywriter import generate_copies
@@ -20,7 +20,7 @@ from backend.services.content import create_draft, list_drafts, update_status
 from backend.services.radar import build_opportunities
 from backend.adapters.instagram import publish_photo
 from backend.config import META_APP_ID, META_APP_SECRET, META_REDIRECT_URI, SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, USE_MOCK
-from backend.adapters.google_calendar import authorization_url, create_event, exchange_code
+from backend.adapters.google_calendar import create_event, save_provider_token
 
 app = FastAPI(title="Instagram Content Engine API", version="2.0.0")
 
@@ -273,24 +273,14 @@ def publish_content(content_id: str, request: Request):
     return ContentPublishResponse(id=content_id, status="PUBLISHED", platform_id=platform_id)
 
 
-@app.get("/api/calendar/auth")
-def calendar_auth(request: Request):
+@app.post("/api/calendar/connect")
+def calendar_connect(token: GoogleTokenRequest, request: Request):
     user_id = _supabase_user(request)
     try:
-        return {"url": authorization_url(_encode_state(user_id))}
+        save_provider_token(user_id, token.access_token, token.refresh_token)
     except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-
-
-@app.get("/api/calendar/callback")
-def calendar_callback(code: str = Query(...), state: str = Query(...)):
-    user_id = _decode_state(state)
-    try:
-        exchange_code(code, user_id)
-    except requests.RequestException as error:
-        raise HTTPException(status_code=502, detail=f"Autenticazione Google fallita: {error}") from error
-    response = RedirectResponse(url="/?google=connected", status_code=303)
-    return response
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"status": "connected"}
 
 
 @app.post("/api/calendar/events", response_model=CalendarEventResponse)

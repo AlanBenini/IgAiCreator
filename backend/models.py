@@ -81,3 +81,7 @@ class CalendarEventRequest(BaseModel):
 class CalendarEventResponse(BaseModel):
     id: str
     html_link: Optional[str] = None
+
+class GoogleTokenRequest(BaseModel):
+    access_token: str
+    refresh_token: str = ""

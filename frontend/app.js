@@ -14,7 +14,8 @@ async function initializeAuth() {
   supabaseClient = window.supabase.createClient(config.supabase_url, config.supabase_anon_key);
   const { data: { session } } = await supabaseClient.auth.getSession();
   updateAuthUI(session);
-  supabaseClient.auth.onAuthStateChange((_event, nextSession) => updateAuthUI(nextSession));
+  await syncGoogleCalendar(session);
+  supabaseClient.auth.onAuthStateChange(async (_event, nextSession) => { updateAuthUI(nextSession); await syncGoogleCalendar(nextSession); });
 }
 function updateAuthUI(session) {
   const user = session?.user;
@@ -25,7 +26,7 @@ function updateAuthUI(session) {
 }
 async function loginWithGoogle() {
   if (!supabaseClient) return status('workspace-status', 'Configura Supabase su Vercel prima di accedere.', 'error');
-  await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+  await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin, scopes: 'https://www.googleapis.com/auth/calendar.events', queryParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' } } });
 }
 async function logout() { if (supabaseClient) await supabaseClient.auth.signOut(); }
 
@@ -50,7 +51,8 @@ async function loadContent() { const container = $('content-library'); if (!cont
 function renderTodayContent(items) { const container = $('today-content'); if (!container) return; container.replaceChildren(); items.slice(0, 3).forEach(item => container.appendChild(renderContentItem(item))); if (!items.length) container.innerHTML = '<p class="empty-state">Ancora nessun contenuto creato.</p>'; }
 async function updateContent(id, nextStatus) { const response = await fetch(`/api/content/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) }); if (!response.ok) { const data = await response.json(); return status('workspace-status', data.detail || 'Aggiornamento non riuscito.', 'error'); } loadContent(); }
 async function publishContent(id) { const response = await fetch(`/api/content/${id}/publish`, { method: 'POST', headers: await authHeaders() }); const data = await response.json(); if (!response.ok) return status('workspace-status', data.detail || 'Pubblicazione non riuscita.', 'error'); loadContent(); status('workspace-status', 'Contenuto pubblicato.', 'success'); }
-async function connectGoogle() { try { const response = await fetch('/api/calendar/auth', { headers: await authHeaders() }); const data = await response.json(); if (!response.ok) throw new Error(data.detail || 'Google non configurato.'); window.location.href = data.url; } catch (error) { alert(error.message); } }
+async function syncGoogleCalendar(session) { if (!session?.provider_token) return; const response = await fetch('/api/calendar/connect', { method: 'POST', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ access_token: session.provider_token, refresh_token: session.provider_refresh_token || '' }) }); if (!response.ok) { const data = await readResponse(response); status('workspace-status', data.detail || 'Google Calendar non collegato.', 'error'); } }
+async function connectGoogle() { const { data: { session } } = await supabaseClient.auth.getSession(); if (!session) return status('workspace-status', 'Accedi prima con Google.', 'error'); if (!session.provider_token) return loginWithGoogle(); await syncGoogleCalendar(session); await loadOpportunities('opportunity-list'); status('workspace-status', 'Calendario aggiornato.', 'success'); }
 async function connectMeta() { if (!supabaseClient) return status('workspace-status', 'Accedi prima con Google.', 'error'); const { data: { session } } = await supabaseClient.auth.getSession(); if (!session) return status('workspace-status', 'Accedi prima con Google.', 'error'); const response = await fetch('/api/auth/meta/start', { headers: { Authorization: `Bearer ${session.access_token}` } }); const data = await response.json(); if (!response.ok) return status('workspace-status', data.detail || 'Meta non configurato.', 'error'); window.location.href = data.url; }
 async function authHeaders() {
   if (!supabaseClient) return {};
