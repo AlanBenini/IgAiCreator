@@ -174,3 +174,27 @@ body::before { display: none; }
   .schedule-time { grid-template-columns: 1fr; }
   .schedule-options > .btn { width: 100%; }
 }
+
+.calendar-shell { margin-bottom: 18px; }
+.calendar-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.calendar-toolbar h2 { min-width: 170px; color: var(--ink); font-size: 20px; text-transform: capitalize; }
+.icon-button { display: inline-grid; place-items: center; width: 38px; height: 38px; border: 1px solid var(--line-strong); border-radius: 7px; background: #ffffff; color: var(--ink); font-size: 17px; font-weight: 800; }
+.icon-button:hover { border-color: var(--coral); background: #fff0eb; color: var(--coral-dark); }
+.calendar-today { margin-left: auto; min-height: 38px; }
+.calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-weekdays { border-bottom: 1px solid var(--line); }
+.calendar-weekdays span { padding: 9px 10px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.calendar-day { position: relative; display: flex; min-height: 104px; flex-direction: column; align-items: flex-start; gap: 7px; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #ffffff; padding: 10px; color: var(--ink); text-align: left; }
+.calendar-day:hover { background: #fff8f5; }
+.calendar-day strong { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; font-size: 12px; }
+.calendar-day.is-outside { background: #fafbfa; color: var(--muted-dark); }
+.calendar-day.is-today strong { background: var(--coral); color: #ffffff; }
+.calendar-event { width: 100%; overflow: hidden; border-left: 3px solid var(--teal); background: #e5f2ed; padding: 4px 6px; color: #185846; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-loading { grid-column: 1 / -1; padding: 30px; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .calendar-toolbar h2 { min-width: 0; flex: 1; font-size: 17px; }
+  .calendar-day { min-height: 72px; padding: 6px; }
+  .calendar-event { font-size: 9px; }
+  .calendar-weekdays span { padding: 7px 4px; font-size: 9px; }
+}
