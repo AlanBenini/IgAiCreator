@@ -53,6 +53,81 @@ function formatEventInput(raw) { if (!raw) return ''; if (raw.length === 10) ret
 function openEventEditor(calendarEvent) { let editor = $('calendar-event-editor'); if (!editor) { editor = document.createElement('section'); editor.id = 'calendar-event-editor'; editor.className = 'calendar-event-editor panel'; $('calendar-grid').parentNode.after(editor); } editor.innerHTML = '<div class="panel-heading"><div><span class="step">EVENTO</span><h2>Modifica evento</h2></div><button class="icon-button" type="button" id="close-event-editor" aria-label="Chiudi">&times;</button></div><form id="calendar-edit-form" class="event-edit-form"><label>Titolo<input id="edit-event-title" type="text" required></label><label>Descrizione<textarea id="edit-event-description" rows="3"></textarea></label><div class="schedule-time"><label>Inizio<input id="edit-event-start" type="datetime-local" required></label><label>Fine<input id="edit-event-end" type="datetime-local" required></label></div><div class="event-editor-actions"><button class="btn btn-danger" id="delete-event-button" type="button">Elimina</button><button class="btn btn-primary" type="submit">Salva modifiche</button></div><div id="event-editor-status" class="status-msg hidden"></div></form>'; $('edit-event-title').value = calendarEvent.summary || ''; $('edit-event-description').value = calendarEvent.description || ''; $('edit-event-start').value = formatEventInput(calendarEvent.start?.dateTime || calendarEvent.start?.date); $('edit-event-end').value = formatEventInput(calendarEvent.end?.dateTime || calendarEvent.end?.date); $('close-event-editor').onclick = () => editor.remove(); $('delete-event-button').onclick = () => { if (window.confirm(`Eliminare '${calendarEvent.summary || 'Evento'}'?`)) deleteCalendarEvent(calendarEvent.id).then(() => editor.remove()); }; $('calendar-edit-form').onsubmit = async event => { event.preventDefault(); const message = $('event-editor-status'); try { const response = await fetch(`/api/calendar/events/${encodeURIComponent(calendarEvent.id)}`, { method: 'PATCH', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ title: $('edit-event-title').value.trim(), description: $('edit-event-description').value.trim(), start: `${$('edit-event-start').value}:00`, end: `${$('edit-event-end').value}:00` }) }); const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Modifica non riuscita.'); message.textContent = 'Evento aggiornato.'; message.className = 'status-msg success'; await loadCalendarMonth(); await loadOpportunities('opportunity-list'); } catch (error) { message.textContent = error.message; message.className = 'status-msg error'; } }; editor.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 function renderCalendar(events = []) { const grid = $('calendar-grid'); if (!grid) return; const start = weekStart(calendarMonth); const end = new Date(start); end.setDate(end.getDate() + 7); $('calendar-month-label').textContent = `${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(end - 86400000).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`; grid.replaceChildren(); const header = document.createElement('div'); header.className = 'calendar-week-header'; header.innerHTML = '<span></span>'; for (let index = 0; index < 7; index += 1) { const date = new Date(start); date.setDate(start.getDate() + index); const day = document.createElement('span'); day.className = calendarDateKey(date) === calendarDateKey(new Date()) ? 'is-today' : ''; day.textContent = date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' }); header.appendChild(day); } const body = document.createElement('div'); body.className = 'calendar-week-body'; const timeAxis = document.createElement('div'); timeAxis.className = 'calendar-time-axis'; for (let hour = 0; hour < 24; hour += 1) { const label = document.createElement('span'); label.textContent = `${String(hour).padStart(2, '0')}:00`; timeAxis.appendChild(label); } body.appendChild(timeAxis); for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) { const column = document.createElement('div'); column.className = 'calendar-day-column'; column.addEventListener('click', event => { if (event.target === column) { const rect = column.getBoundingClientRect(); const date = new Date(start); date.setDate(start.getDate() + dayIndex); date.setHours(Math.min(23, Math.floor((event.clientY - rect.top) / 60)), 0, 0, 0); openCalendarPlanner(date); } }); body.appendChild(column); } events.forEach(calendarEvent => { const rawStart = calendarEvent.start?.dateTime || calendarEvent.start?.date; if (!rawStart || !calendarEvent.start?.dateTime) return; const eventDate = new Date(rawStart); const dayIndex = Math.floor((new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()) - new Date(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000); if (dayIndex < 0 || dayIndex > 6) return; const rawEnd = calendarEvent.end?.dateTime || rawStart; const duration = Math.max(30, (new Date(rawEnd) - eventDate) / 60000); const eventCard = document.createElement('button'); eventCard.type = 'button'; eventCard.className = 'calendar-timed-event'; eventCard.style.top = `${eventDate.getHours() * 60 + eventDate.getMinutes()}px`; eventCard.style.height = `${Math.min(1380, duration)}px`; eventCard.textContent = calendarEvent.summary || 'Evento'; eventCard.title = 'Modifica evento'; eventCard.onclick = event => { event.stopPropagation(); openEventEditor(calendarEvent); }; body.children[dayIndex + 1].appendChild(eventCard); }); grid.append(header, body); updateBulkDeleteButton(); }
 async function deleteCalendarEvent(eventId) { try { const response = await fetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: 'DELETE', headers: await authHeaders() }); const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Eliminazione non riuscita.'); await loadCalendarMonth(); await loadOpportunities('opportunity-list'); } catch (error) { status('workspace-status', error.message, 'error'); } }
+function renderCalendar(events = []) {
+  const grid = $('calendar-grid');
+  if (!grid) return;
+  const start = weekStart(calendarMonth);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  $('calendar-month-label').textContent = `${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(end - 86400000).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  grid.replaceChildren();
+  const header = document.createElement('div');
+  header.className = 'calendar-week-header';
+  header.innerHTML = '<span></span>';
+  for (let index = 0; index < 7; index += 1) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const day = document.createElement('span');
+    day.className = calendarDateKey(date) === calendarDateKey(new Date()) ? 'is-today' : '';
+    day.textContent = date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
+    header.appendChild(day);
+  }
+  const body = document.createElement('div');
+  body.className = 'calendar-week-body';
+  const timeAxis = document.createElement('div');
+  timeAxis.className = 'calendar-time-axis';
+  for (let hour = 0; hour < 24; hour += 1) {
+    const label = document.createElement('span');
+    label.textContent = `${String(hour).padStart(2, '0')}:00`;
+    timeAxis.appendChild(label);
+  }
+  body.appendChild(timeAxis);
+  for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+    const column = document.createElement('div');
+    column.className = 'calendar-day-column';
+    column.addEventListener('click', event => {
+      if (event.target !== column) return;
+      const rect = column.getBoundingClientRect();
+      const date = new Date(start);
+      date.setDate(start.getDate() + dayIndex);
+      date.setHours(Math.min(23, Math.floor((event.clientY - rect.top) / 60)), 0, 0, 0);
+      openCalendarPlanner(date);
+    });
+    body.appendChild(column);
+  }
+  events.forEach(calendarEvent => {
+    if (!calendarEvent.start?.dateTime) return;
+    const eventDate = new Date(calendarEvent.start.dateTime);
+    const dayIndex = Math.floor((new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()) - new Date(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000);
+    if (dayIndex < 0 || dayIndex > 6) return;
+    const eventEnd = new Date(calendarEvent.end?.dateTime || calendarEvent.start.dateTime);
+    const duration = Math.max(30, (eventEnd - eventDate) / 60000);
+    const row = document.createElement('div');
+    row.className = 'calendar-timed-event-row';
+    row.style.top = `${eventDate.getHours() * 60 + eventDate.getMinutes()}px`;
+    row.style.height = `${Math.min(1380, duration)}px`;
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedCalendarEvents.has(calendarEvent.id);
+    checkbox.setAttribute('aria-label', `Seleziona ${calendarEvent.summary || 'evento'}`);
+    checkbox.addEventListener('click', event => event.stopPropagation());
+    checkbox.addEventListener('change', event => {
+      if (event.target.checked) selectedCalendarEvents.add(calendarEvent.id);
+      else selectedCalendarEvents.delete(calendarEvent.id);
+      updateBulkDeleteButton();
+    });
+    const eventCard = document.createElement('button');
+    eventCard.type = 'button';
+    eventCard.className = 'calendar-timed-event';
+    eventCard.textContent = calendarEvent.summary || 'Evento';
+    eventCard.title = 'Modifica evento';
+    eventCard.addEventListener('click', event => { event.stopPropagation(); openEventEditor(calendarEvent); });
+    row.append(checkbox, eventCard);
+    body.children[dayIndex + 1].appendChild(row);
+  });
+  grid.append(header, body);
+  updateBulkDeleteButton();
+}
 async function deleteSelectedCalendarEvents() { const eventIds = [...selectedCalendarEvents]; if (!eventIds.length) return; if (!window.confirm(`Eliminare ${eventIds.length} eventi selezionati?`)) return; try { const response = await fetch('/api/calendar/events/bulk-delete', { method: 'POST', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ event_ids: eventIds }) }); const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Eliminazione multipla non riuscita.'); selectedCalendarEvents.clear(); await loadCalendarMonth(); await loadOpportunities('opportunity-list'); status('workspace-status', `${data.count} eventi eliminati.`, 'success'); } catch (error) { status('workspace-status', error.message, 'error'); } }
 function updateBulkDeleteButton() { const button = $('calendar-delete-selected'); if (!button) return; button.disabled = selectedCalendarEvents.size === 0; button.textContent = selectedCalendarEvents.size ? `Elimina selezionati (${selectedCalendarEvents.size})` : 'Elimina selezionati'; }
 async function loadCalendarMonth() { const grid = $('calendar-grid'); if (!grid) return; grid.innerHTML = '<p class="calendar-loading">Caricamento calendario...</p>'; try { const headers = await authHeaders(); const statusResponse = await fetch('/api/calendar/status', { headers }); const connection = await readResponse(statusResponse); if (!statusResponse.ok) throw new Error(connection.detail || 'Stato Google Calendar non disponibile.'); if (!connection.connected) { grid.innerHTML = '<p class="calendar-loading">Collega Google Calendar per visualizzare il calendario.</p>'; return; } const start = weekStart(calendarMonth); const end = new Date(start); end.setDate(end.getDate() + 7); const response = await fetch(`/api/calendar/events?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`, { headers }); const events = await readResponse(response); if (!response.ok) throw new Error(events.detail || 'Calendario non disponibile.'); renderCalendar(events); } catch (error) { grid.innerHTML = `<p class="calendar-loading">${error.message}</p>`; } }

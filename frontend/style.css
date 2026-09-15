@@ -342,6 +342,9 @@ body { background: var(--bg); color: var(--ink); font-family: 'Manrope', sans-se
 .calendar-day-column { position: relative; border-right: 1px solid var(--line); background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 59px, #edf0f2 60px); }
 .calendar-timed-event { position: absolute; right: 4px; left: 4px; overflow: hidden; border: 1px solid #93c5fd; border-left: 3px solid #2563eb; border-radius: 4px; background: #dbeafe; padding: 5px 6px; color: #1e40af; font-size: 10px; font-weight: 800; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-timed-event:hover { background: #bfdbfe; }
+.calendar-timed-event-row { position: absolute; right: 4px; left: 4px; display: flex; align-items: flex-start; gap: 3px; }
+.calendar-timed-event-row input { position: relative; z-index: 2; flex: 0 0 auto; margin-top: 6px; accent-color: #2563eb; }
+.calendar-timed-event-row .calendar-timed-event { position: static; flex: 1; min-width: 0; width: 0; height: 100%; }
 .calendar-event-editor { margin-top: 16px; }
 .event-edit-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .event-edit-form > label:first-child, .event-edit-form > label:nth-child(2) { grid-column: 1 / -1; }
