@@ -1,0 +1,23 @@
+---
+**POST 1: Donald Trump – Il secondo capitolo**  
+**CATEGORIA:** GRAFICA_TESTUALE  
+**HOOK:** *Un leader si misura quando le promesse diventano azioni visibili. Quale cambiamento vorresti vedere nella sua seconda amministrazione?* #donaldtrump #politica #cambiamento  
+
+**CAPTION:**  
+Un leader si misura quando le promesse diventano azioni visibili. Quale cambiamento vorresti vedere nella sua seconda amministrazione?  
+🗳️ *Vota* nei commenti la tua priorità: economia, immigrazione, diritti civili o altro.  
+🔄 Condividi se credi che la trasparenza sia la chiave per una governance efficace.  
+#donaldtrump #politica #cambiamento #secondoterm #partecipazione #cittadinanza  
+
+**VISUAL_STRATEGY:**  
+- **Tipo di immagine:** Infografica stilizzata a colori patriottici (rosso, bianco, blu).  
+- **Layout:**  
+  1. **Header** con la frase hook in grande, tipografia bold sans‑serif, sfondo leggermente sfumato.  
+  2. **Centro:** silhouette iconica di Donald Trump (profilo laterale) stilizzata in line art, circondata da icone simboliche (grafico di crescita, valigia per immigrazione, bilancia per diritti civili).  
+  3. **Bottom:** Call‑to‑action testuale “Qual è il tuo voto?” con tre piccoli cerchi numerati (1‑Economia, 2‑Immigrazione, 3‑Diritti civili) per stimolare i commenti.  
+- **Elementi grafici:** linee di collegamento sottili che collegano la silhouette alle icone, effetto “glow” su ogni icona per attirare l’occhio.  
+- **Tipografia:** Font “Montserrat” per il titolo, “Roboto” per il corpo; colore bianco su sfondo scuro per massima leggibilità.  
+- **Dimensione:** 1080 × 1080 px, ottimizzata per Instagram Feed.  
+
+**PROMPT IMMAGINE PER GENERATORE VISUALE:**  
+“Create a square (1080x1080) Instagram graphic in a patriotic red‑white‑blue color scheme. At the top, place the bold headline ‘Un leader si misura quando le promesse diventano azioni visibili. Quale cambiamento vorresti vedere nella sua seconda amministrazione?’ in large sans‑serif font. In the center, draw a stylized line‑art silhouette of Donald Trump’s profile, surrounded by three simple icons: a rising bar chart (economy), a suitcase with a globe (immigration), and a balanced scale (civil rights). Connect each icon to the silhouette with thin glowing lines. At the bottom, add a call‑to‑action box with the text ‘Qual è il tuo voto?’ and three numbered circles labeled 1‑Economia, 2‑Immigrazione, 3‑Diritti civili. Use Montserrat for headings and Roboto for body text, white font on a dark navy background, with subtle gradient and soft glow effects.”

@@ -1,0 +1,28 @@
+Sei un Content Strategist e Copywriter specializzato in Instagram.
+
+POST BENCHMARK CON IL MIGLIOR ENGAGEMENT:
+- Formato: IMAGE
+- Engagement Rate: 29.45%
+- Save Rate (Salvataggi): 0.73%
+- Hook originale: "Una citta funziona quando le decisioni diventano servizi visibili. Quale cambiamento vorresti vedere nel tuo quartiere? #amministrazione #comunita #politicalocale"
+- CTA originale: "N/D"
+- Testo originale:
+"""Una citta funziona quando le decisioni diventano servizi visibili. Quale cambiamento vorresti vedere nel tuo quartiere? #amministrazione #comunita #politicalocale"""
+
+ISTRUZIONI:
+Genera 1 nuovi post che replicano esattamente la formula logica del post vincente.
+Tratta specificamente questo argomento: donald trump 2
+Per ogni post aggiungi un prompt immagine completo, pronto per un generatore visuale.
+
+Per ciascun post determina la categoria visiva: GRAFICA_TESTUALE o SHOOTING_FOTOGRAFICO.
+Formatta ciascun post cosi:
+
+---
+POST [Numero]: [Titolo del Topic]
+CATEGORIA: [GRAFICA_TESTUALE / SHOOTING_FOTOGRAFICO]
+HOOK: [Gancio della prima riga]
+CAPTION:
+[Testo completo pronto per la pubblicazione]
+VISUAL_STRATEGY:
+[Dettagli visuali]
+---
