@@ -77,5 +77,7 @@ def create_event(user_id: str, title: str, description: str, start: str, end: st
 
 def list_events(user_id: str, time_min: str, time_max: str) -> list[dict]:
     response = requests.get(CALENDAR_URL, headers={"Authorization": f"Bearer {_access_token(user_id)}"}, params={"timeMin": time_min, "timeMax": time_max, "singleEvents": "true", "orderBy": "startTime"}, timeout=30)
-    response.raise_for_status()
+    if response.status_code >= 400:
+        detail = response.json().get("error", {}).get("message", response.text[:300])
+        raise RuntimeError(f"Google Calendar ha rifiutato la richiesta: {detail}")
     return response.json().get("items", [])

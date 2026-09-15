@@ -26,7 +26,7 @@ function updateAuthUI(session) {
 }
 async function loginWithGoogle() {
   if (!supabaseClient) return status('workspace-status', 'Configura Supabase su Vercel prima di accedere.', 'error');
-  await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin, scopes: 'https://www.googleapis.com/auth/calendar.events', queryParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' } } });
+  await supabaseClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin, scopes: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events', queryParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' } } });
 }
 async function logout() { if (supabaseClient) await supabaseClient.auth.signOut(); }
 

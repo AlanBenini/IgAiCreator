@@ -238,7 +238,7 @@ def get_opportunities(request: Request):
     user_id = _supabase_user(request) if request.headers.get("authorization") else None
     try:
         return build_opportunities(user_id)
-    except requests.RequestException as error:
+    except (RuntimeError, requests.RequestException) as error:
         raise HTTPException(status_code=502, detail=f"Impossibile leggere il calendario: {error}") from error
 
 
