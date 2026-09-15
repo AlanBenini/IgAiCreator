@@ -109,7 +109,7 @@ def meta_auth_start(request: Request):
     user_id = _supabase_user(request)
     if not META_APP_ID or not META_APP_SECRET:
         raise HTTPException(status_code=503, detail="Configura META_APP_ID e META_APP_SECRET su Vercel.")
-    params = {"client_id": META_APP_ID, "redirect_uri": META_REDIRECT_URI, "state": _encode_state(user_id), "response_type": "code", "scope": "pages_show_list,pages_read_engagement,instagram_basic,instagram_content_publish"}
+    params = {"client_id": META_APP_ID, "redirect_uri": META_REDIRECT_URI, "state": _encode_state(user_id), "response_type": "code", "scope": "pages_show_list,pages_read_engagement"}
     return {"url": f"https://www.facebook.com/v21.0/dialog/oauth?{urlencode(params)}"}
 
 
