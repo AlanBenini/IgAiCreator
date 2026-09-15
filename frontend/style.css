@@ -150,3 +150,27 @@ body::before { display: none; }
   .section-header p:not(.eyebrow) { font-size: 13px; }
   .btn { min-height: 46px; }
 }
+
+.calendar-planner { margin-bottom: 34px; }
+.schedule-form { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(360px, 1.2fr); gap: 28px; }
+.schedule-fields, .schedule-options { display: flex; flex-direction: column; gap: 14px; }
+.schedule-form label, .schedule-form legend { color: var(--ink); font-size: 12px; font-weight: 800; }
+.schedule-form label span { margin-left: 6px; color: var(--muted-dark); font: 10px 'DM Mono', monospace; font-weight: 400; }
+.schedule-form input[type="text"], .schedule-form input[type="datetime-local"], .schedule-form textarea, .schedule-form select { display: block; width: 100%; margin-top: 6px; border: 1px solid #aebbb2; border-radius: 7px; background: #ffffff; color: var(--ink); padding: 11px 12px; font-size: 13px; }
+.schedule-form textarea { resize: vertical; }
+.schedule-form input:focus, .schedule-form textarea:focus, .schedule-form select:focus { border-color: var(--coral); outline: 0; box-shadow: 0 0 0 3px rgba(216,95,69,.12); }
+.schedule-time { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.schedule-form fieldset { border: 1px solid var(--line); border-radius: 7px; padding: 13px; }
+.schedule-form legend { padding: 0 5px; }
+.radio-option { display: inline-flex; align-items: center; gap: 7px; margin: 4px 18px 0 0; font-weight: 600 !important; }
+.radio-option input, .day-options input { accent-color: var(--coral); }
+.day-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
+.day-options label { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); border-radius: 6px; background: #ffffff; padding: 8px 9px; font-size: 11px; font-weight: 700; }
+.day-options label:has(input:checked) { border-color: var(--coral); background: #fff0eb; color: #9d3e2e; }
+.schedule-options > .btn { align-self: flex-start; margin-top: auto; }
+
+@media (max-width: 640px) {
+  .schedule-form { grid-template-columns: 1fr; gap: 20px; }
+  .schedule-time { grid-template-columns: 1fr; }
+  .schedule-options > .btn { width: 100%; }
+}

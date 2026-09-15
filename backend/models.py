@@ -78,6 +78,15 @@ class CalendarEventRequest(BaseModel):
     start: str
     end: str
 
+class CalendarScheduleRequest(BaseModel):
+    title: str
+    description: str = ""
+    start: str
+    end: str
+    frequency: str = "weekly"
+    days: List[str] = []
+    weeks: int = 1
+
 class CalendarEventResponse(BaseModel):
     id: str
     html_link: Optional[str] = None

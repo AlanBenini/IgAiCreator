@@ -48,6 +48,17 @@ def save_provider_token(user_id: str, access_token: str, refresh_token: str = ""
     })
 
 
+def has_connection(user_id: str) -> bool:
+    response = requests.get(
+        f"{SUPABASE_URL}/rest/v1/google_connections",
+        params={"user_id": f"eq.{user_id}", "select": "user_id"},
+        headers={"apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"},
+        timeout=20,
+    )
+    response.raise_for_status()
+    return bool(response.json())
+
+
 def _access_token(user_id: str) -> str:
     response = requests.get(
         f"{SUPABASE_URL}/rest/v1/google_connections",
@@ -71,6 +82,25 @@ def _access_token(user_id: str) -> str:
 
 def create_event(user_id: str, title: str, description: str, start: str, end: str) -> dict:
     response = requests.post(CALENDAR_URL, headers={"Authorization": f"Bearer {_access_token(user_id)}", "Content-Type": "application/json"}, json={"summary": title, "description": description, "start": {"dateTime": start}, "end": {"dateTime": end}}, timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
+def create_recurring_event(user_id: str, title: str, description: str, start: str, end: str, frequency: str, days: list[str], weeks: int) -> dict:
+    if frequency not in {"weekly", "biweekly"}:
+        raise RuntimeError("Frequenza non supportata.")
+    if not days or any(day not in {"MO", "TU", "WE", "TH", "FR", "SA", "SU"} for day in days) or weeks < 1 or weeks > 52:
+        raise RuntimeError("Seleziona almeno un giorno e da 1 a 52 settimane.")
+    interval = 2 if frequency == "biweekly" else 1
+    recurrence = f"RRULE:FREQ=WEEKLY;INTERVAL={interval};BYDAY={','.join(days)};COUNT={len(days) * weeks}"
+    body = {
+        "summary": title,
+        "description": description,
+        "start": {"dateTime": start, "timeZone": "Europe/Rome"},
+        "end": {"dateTime": end, "timeZone": "Europe/Rome"},
+        "recurrence": [recurrence],
+    }
+    response = requests.post(CALENDAR_URL, headers={"Authorization": f"Bearer {_access_token(user_id)}", "Content-Type": "application/json"}, json=body, timeout=30)
     response.raise_for_status()
     return response.json()
 

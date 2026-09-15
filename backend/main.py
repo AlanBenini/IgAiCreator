@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from backend.config import BASE_DIR, STORAGE_DIR
-from backend.models import AnalyticsSummary, AssetRecord, CalendarEventRequest, CalendarEventResponse, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, GoogleTokenRequest, Opportunity
+from backend.models import AnalyticsSummary, AssetRecord, CalendarEventRequest, CalendarEventResponse, CalendarScheduleRequest, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, GoogleTokenRequest, Opportunity
 from backend.services.assets import asset_public_url, list_assets, save_uploads
 from backend.services.analytics import calculate_analytics
 from backend.services.copywriter import generate_copies
@@ -20,7 +20,7 @@ from backend.services.content import create_draft, list_drafts, update_status
 from backend.services.radar import build_opportunities
 from backend.adapters.instagram import publish_photo
 from backend.config import META_APP_ID, META_APP_SECRET, META_REDIRECT_URI, SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, USE_MOCK
-from backend.adapters.google_calendar import create_event, save_provider_token
+from backend.adapters.google_calendar import create_event, create_recurring_event, has_connection, save_provider_token
 
 app = FastAPI(title="Instagram Content Engine API", version="2.0.0")
 
@@ -283,6 +283,15 @@ def calendar_connect(token: GoogleTokenRequest, request: Request):
     return {"status": "connected"}
 
 
+@app.get("/api/calendar/status")
+def calendar_status(request: Request):
+    user_id = _supabase_user(request)
+    try:
+        return {"connected": has_connection(user_id)}
+    except requests.RequestException as error:
+        raise HTTPException(status_code=502, detail=f"Impossibile verificare Google Calendar: {error}") from error
+
+
 @app.post("/api/calendar/events", response_model=CalendarEventResponse)
 def calendar_event(event: CalendarEventRequest, request: Request):
     user_id = _supabase_user(request)
@@ -292,6 +301,16 @@ def calendar_event(event: CalendarEventRequest, request: Request):
         created = create_event(user_id, event.title, event.description, event.start, event.end)
     except (RuntimeError, requests.RequestException) as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+    return CalendarEventResponse(id=created["id"], html_link=created.get("htmlLink"))
+
+
+@app.post("/api/calendar/events/recurring", response_model=CalendarEventResponse)
+def calendar_recurring_event(event: CalendarScheduleRequest, request: Request):
+    user_id = _supabase_user(request)
+    try:
+        created = create_recurring_event(user_id, event.title, event.description, event.start, event.end, event.frequency, event.days, event.weeks)
+    except (RuntimeError, requests.RequestException) as error:
+        raise HTTPException(status_code=502, detail=f"Impossibile pianificare gli eventi: {error}") from error
     return CalendarEventResponse(id=created["id"], html_link=created.get("htmlLink"))
 
 
