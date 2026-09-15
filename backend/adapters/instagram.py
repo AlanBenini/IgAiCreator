@@ -1,5 +1,27 @@
 import requests
-from backend.config import GRAPH_BASE_URL, ACCESS_TOKEN, IG_USER_ID, MEDIA_DIR, PUBLIC_BASE_URL
+
+from backend.config import ACCESS_TOKEN, GRAPH_BASE_URL, IG_USER_ID, MEDIA_DIR, PUBLIC_BASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+
+
+def _meta_connection_for_user(user_id: str | None) -> tuple[str, str]:
+    if user_id and SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        try:
+            response = requests.get(
+                f"{SUPABASE_URL}/rest/v1/meta_connections",
+                params={"user_id": f"eq.{user_id}", "select": "page_access_token,instagram_user_id"},
+                headers={
+                    "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                },
+                timeout=15,
+            )
+            if response.status_code == 200:
+                rows = response.json()
+                if rows:
+                    return rows[0].get("page_access_token", ACCESS_TOKEN), rows[0].get("instagram_user_id", IG_USER_ID)
+        except requests.RequestException:
+            pass
+    return ACCESS_TOKEN, IG_USER_ID
 
 
 def download_file(url: str, filename: str) -> str:
@@ -39,10 +61,11 @@ def process_media_assets(post: dict) -> list:
     return saved_paths
 
 
-def fetch_graph_posts(limit: int = 25) -> list:
-    endpoint = f"{GRAPH_BASE_URL}/{IG_USER_ID}/media"
+def fetch_graph_posts(limit: int = 25, user_id: str | None = None) -> list:
+    access_token, ig_user_id = _meta_connection_for_user(user_id)
+    endpoint = f"{GRAPH_BASE_URL}/{ig_user_id}/media"
     fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,children{id,media_type,media_url}"
-    params = {"fields": fields, "limit": limit, "access_token": ACCESS_TOKEN}
+    params = {"fields": fields, "limit": limit, "access_token": access_token}
     try:
         response = requests.get(endpoint, params=params, timeout=30)
         response.raise_for_status()
@@ -52,9 +75,10 @@ def fetch_graph_posts(limit: int = 25) -> list:
         return []
 
 
-def fetch_graph_insights(media_id: str) -> dict:
+def fetch_graph_insights(media_id: str, user_id: str | None = None) -> dict:
+    access_token, _ = _meta_connection_for_user(user_id)
     endpoint = f"{GRAPH_BASE_URL}/{media_id}/insights"
-    params = {"metric": "reach,saved,total_interactions", "access_token": ACCESS_TOKEN}
+    params = {"metric": "reach,saved,total_interactions", "access_token": access_token}
     try:
         response = requests.get(endpoint, params=params, timeout=30)
         response.raise_for_status()
@@ -65,13 +89,14 @@ def fetch_graph_insights(media_id: str) -> dict:
         return {}
 
 
-def publish_photo(image_path: str, caption: str) -> str:
+def publish_photo(image_path: str, caption: str, user_id: str | None = None) -> str:
+    access_token, ig_user_id = _meta_connection_for_user(user_id)
     if not PUBLIC_BASE_URL:
         raise RuntimeError("Configura PUBLIC_BASE_URL per pubblicare su Instagram con Graph API.")
     image_url = f"{PUBLIC_BASE_URL}{image_path}"
-    container = requests.post(f"{GRAPH_BASE_URL}/{IG_USER_ID}/media", params={"image_url": image_url, "caption": caption, "access_token": ACCESS_TOKEN}, timeout=30)
+    container = requests.post(f"{GRAPH_BASE_URL}/{ig_user_id}/media", params={"image_url": image_url, "caption": caption, "access_token": access_token}, timeout=30)
     container.raise_for_status()
     creation_id = container.json()["id"]
-    published = requests.post(f"{GRAPH_BASE_URL}/{IG_USER_ID}/media_publish", params={"creation_id": creation_id, "access_token": ACCESS_TOKEN}, timeout=30)
+    published = requests.post(f"{GRAPH_BASE_URL}/{ig_user_id}/media_publish", params={"creation_id": creation_id, "access_token": access_token}, timeout=30)
     published.raise_for_status()
     return published.json()["id"]

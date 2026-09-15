@@ -91,13 +91,34 @@ def _supabase_user(request: Request) -> str:
     return response.json()["id"]
 
 
+def _resolve_meta_instagram_id(page: dict, page_access_token: str) -> str:
+    nested = page.get("instagram_business_account") or {}
+    instagram_id = nested.get("id")
+    if instagram_id:
+        return instagram_id
+    page_id = page.get("id")
+    if not page_id or not page_access_token:
+        return ""
+    try:
+        response = requests.get(
+            f"https://graph.facebook.com/v21.0/{page_id}",
+            params={"fields": "instagram_business_account", "access_token": page_access_token},
+            timeout=30,
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return ""
+    payload = response.json().get("instagram_business_account") or {}
+    return payload.get("id", "")
+
+
 def _save_meta_connection(user_id: str, page: dict, instagram_id: str) -> None:
     if not SUPABASE_SERVICE_ROLE_KEY:
         raise HTTPException(status_code=503, detail="Configura SUPABASE_SERVICE_ROLE_KEY su Vercel.")
     response = requests.post(
         f"{SUPABASE_URL}/rest/v1/meta_connections",
         headers={"apikey": SUPABASE_SERVICE_ROLE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"},
-        json={"user_id": user_id, "page_id": page["id"], "page_name": page.get("name", ""), "page_access_token": page["access_token"], "instagram_user_id": instagram_id},
+        json={"user_id": user_id, "page_id": page["id"], "page_name": page.get("name", ""), "page_access_token": page["access_token"], "instagram_user_id": instagram_id or ""},
         timeout=20,
     )
     if response.status_code not in {200, 201}:
@@ -121,17 +142,24 @@ def meta_auth_callback(code: str = Query(...), state: str = Query(...)):
     token = token_response.json()["access_token"]
     accounts = requests.get("https://graph.facebook.com/v21.0/me/accounts", params={"fields": "id,name,access_token,instagram_business_account", "access_token": token}, timeout=30)
     accounts.raise_for_status()
-    instagram = next((item for item in accounts.json().get("data", []) if item.get("instagram_business_account")), None)
-    if not instagram:
-        raise HTTPException(status_code=400, detail="Nessun account Instagram Business/Creator collegato alla pagina Facebook.")
-    _save_meta_connection(user_id, instagram, instagram["instagram_business_account"]["id"])
+    pages = accounts.json().get("data", [])
+    if not pages:
+        raise HTTPException(status_code=400, detail="Nessuna pagina Facebook trovata per questo account.")
+    page = next((item for item in pages if item.get("name")), pages[0])
+    instagram_id = _resolve_meta_instagram_id(page, page.get("access_token", token))
+    if not instagram_id:
+        # Alcune pagine Facebook sono collegate ma non esponono subito l'account Instagram nella risposta di /me/accounts.
+        # Salviamo comunque la pagina per non bloccare il collegamento e permettere all'utente di tornare a usarla.
+        _save_meta_connection(user_id, page, "")
+        return RedirectResponse(url="/?meta=connected&page_only=1", status_code=303)
+    _save_meta_connection(user_id, page, instagram_id)
     return RedirectResponse(url="/?meta=connected", status_code=303)
 
 
 @app.get("/api/analytics", response_model=AnalyticsSummary)
-def get_analytics():
-    # Il frontend riceve già dati ordinati e pronti per i grafici.
-    return calculate_analytics()
+def get_analytics(request: Request):
+    user_id = _supabase_user(request) if request.headers.get("authorization") else None
+    return calculate_analytics(user_id=user_id)
 
 
 @app.post("/api/generate-copy", response_model=CopyGenerationResponse)
@@ -169,7 +197,7 @@ def approve_content(content_id: str, request: ContentStatusRequest):
 
 
 @app.post("/api/content/{content_id}/publish", response_model=ContentPublishResponse)
-def publish_content(content_id: str):
+def publish_content(content_id: str, request: Request):
     drafts = list_drafts()
     draft = next((item for item in drafts if item.id == content_id), None)
     if not draft:
@@ -177,11 +205,12 @@ def publish_content(content_id: str):
     if draft.status != "APPROVED":
         raise HTTPException(status_code=409, detail="Approva il contenuto prima di pubblicarlo.")
     caption = draft.copies[0].caption if draft.copies else ""
+    user_id = _supabase_user(request) if request.headers.get("authorization") else None
     if USE_MOCK:
         update_status(content_id, "PUBLISHED")
         return ContentPublishResponse(id=content_id, status="PUBLISHED", platform_id=f"mock_{content_id[:8]}")
     try:
-        platform_id = publish_photo(asset_public_url(draft.asset_ids[0]), caption)
+        platform_id = publish_photo(asset_public_url(draft.asset_ids[0]), caption, user_id=user_id)
     except (RuntimeError, requests.RequestException) as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
     update_status(content_id, "PUBLISHED")

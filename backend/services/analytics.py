@@ -21,15 +21,15 @@ def diagnose_post(row: dict, averages: dict) -> tuple:
     return " • " + "\n • ".join(strengths), " • " + "\n • ".join(weaknesses)
 
 
-def calculate_analytics() -> AnalyticsSummary:
+def calculate_analytics(user_id: str | None = None) -> AnalyticsSummary:
     # La stessa pipeline funziona con dati demo o con la risposta di Meta.
-    raw_posts = MOCK_POSTS_DATA if USE_MOCK else fetch_graph_posts()
+    raw_posts = MOCK_POSTS_DATA if USE_MOCK else fetch_graph_posts(user_id=user_id)
     if not raw_posts:
         return AnalyticsSummary(total_posts=0, avg_engagement_rate=0, avg_save_rate=0, avg_conversation_rate=0, total_reach=0, top_post_id="", posts=[])
 
     parsed_items = []
     for post in raw_posts:
-        insights = post.get("insights", {}) if USE_MOCK else fetch_graph_insights(post["id"])
+        insights = post.get("insights", {}) if USE_MOCK else fetch_graph_insights(post["id"], user_id=user_id)
         reach = insights.get("reach", 0)
         likes = post.get("like_count", 0)
         comments = post.get("comments_count", 0)
