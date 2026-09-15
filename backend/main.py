@@ -112,6 +112,45 @@ def _resolve_meta_instagram_id(page: dict, page_access_token: str) -> str:
     return payload.get("id", "")
 
 
+def _meta_pages_for_token(token: str) -> list[dict]:
+    accounts = requests.get(
+        "https://graph.facebook.com/v21.0/me/accounts",
+        params={"fields": "id,name,access_token,tasks,instagram_business_account", "access_token": token},
+        timeout=30,
+    )
+    if accounts.status_code != 200:
+        detail = accounts.json().get("error", {}).get("message", accounts.text[:300])
+        raise HTTPException(status_code=502, detail=f"Meta non ha restituito le pagine: {detail}")
+    pages = accounts.json().get("data", [])
+    if pages:
+        return pages
+
+    # Pages assigned through Business Manager may not appear in /me/accounts.
+    businesses = requests.get(
+        "https://graph.facebook.com/v21.0/me/businesses",
+        params={"fields": "id,name", "access_token": token},
+        timeout=30,
+    )
+    if businesses.status_code != 200:
+        return []
+    for business in businesses.json().get("data", []):
+        owned_pages = requests.get(
+            f"https://graph.facebook.com/v21.0/{business['id']}/owned_pages",
+            params={"fields": "id,name,access_token,tasks,instagram_business_account", "access_token": token},
+            timeout=30,
+        )
+        if owned_pages.status_code == 200 and owned_pages.json().get("data"):
+            return owned_pages.json()["data"]
+        client_pages = requests.get(
+            f"https://graph.facebook.com/v21.0/{business['id']}/client_pages",
+            params={"fields": "id,name,access_token,tasks,instagram_business_account", "access_token": token},
+            timeout=30,
+        )
+        if client_pages.status_code == 200 and client_pages.json().get("data"):
+            return client_pages.json()["data"]
+    return []
+
+
 def _save_meta_connection(user_id: str, page: dict, instagram_id: str) -> None:
     if not SUPABASE_SERVICE_ROLE_KEY:
         raise HTTPException(status_code=503, detail="Configura SUPABASE_SERVICE_ROLE_KEY su Vercel.")
@@ -135,7 +174,9 @@ def meta_auth_start(request: Request):
         "redirect_uri": META_REDIRECT_URI,
         "state": _encode_state(user_id),
         "response_type": "code",
-        "scope": "pages_show_list,pages_read_engagement,pages_manage_metadata,instagram_basic,instagram_manage_insights,instagram_content_publish",
+        "auth_type": "rerequest",
+        "return_scopes": "true",
+        "scope": "pages_show_list,pages_read_engagement,business_management",
     }
     return {"url": f"https://www.facebook.com/v21.0/dialog/oauth?{urlencode(params)}"}
 
@@ -146,15 +187,19 @@ def meta_auth_callback(code: str = Query(...), state: str = Query(...)):
     token_response = requests.get("https://graph.facebook.com/v21.0/oauth/access_token", params={"client_id": META_APP_ID, "client_secret": META_APP_SECRET, "redirect_uri": META_REDIRECT_URI, "code": code}, timeout=30)
     token_response.raise_for_status()
     token = token_response.json()["access_token"]
-    accounts = requests.get("https://graph.facebook.com/v21.0/me/accounts", params={"fields": "id,name,access_token,tasks,instagram_business_account", "access_token": token}, timeout=30)
-    if accounts.status_code != 200:
-        detail = accounts.json().get("error", {}).get("message", accounts.text[:300])
-        raise HTTPException(status_code=502, detail=f"Meta non ha restituito le pagine: {detail}")
-    pages = accounts.json().get("data", [])
+    permissions = requests.get(
+        "https://graph.facebook.com/v21.0/me/permissions",
+        params={"access_token": token},
+        timeout=30,
+    )
+    pages = _meta_pages_for_token(token)
     if not pages:
         me = requests.get("https://graph.facebook.com/v21.0/me", params={"fields": "id,name", "access_token": token}, timeout=30)
         me_detail = me.json().get("error", {}).get("message", me.text[:300]) if me.status_code != 200 else "Meta non associa pagine gestibili a questo token."
-        raise HTTPException(status_code=400, detail=f"Meta non restituisce la pagina per l'account {me.json().get('name', 'selezionato')}: {me_detail} Verifica che questo profilo abbia accesso alla Pagina in Impostazioni Pagina > Accesso alla Pagina e che l'app abbia le permission pages_show_list e pages_read_engagement.")
+        permission_rows = permissions.json().get("data", []) if permissions.status_code == 200 else []
+        granted = [item.get("permission") for item in permission_rows if item.get("status") == "granted"]
+        declined = [item.get("permission") for item in permission_rows if item.get("status") != "granted"]
+        raise HTTPException(status_code=400, detail=f"Meta non restituisce la pagina per l'account {me.json().get('name', 'selezionato')}: {me_detail} Permission concesse: {', '.join(granted) or 'nessuna'}. Permission rifiutate o mancanti: {', '.join(declined) or 'non indicate'}. Controlla Accesso alla Pagina per Bing Bong, poi riprova e accetta tutte le richieste Meta.")
     page = next((item for item in pages if item.get("name")), pages[0])
     instagram_id = _resolve_meta_instagram_id(page, page.get("access_token", token))
     if not instagram_id:
