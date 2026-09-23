@@ -73,3 +73,18 @@
 **Motivazione:** dopo il redesign l'utente vedeva l'HTML nuovo con il CSS/JS vecchi in cache: il markup della sidebar appariva come testo sciolto e i pulsanti erano invisibili. Il server locale non inviava alcun `Cache-Control` (verificato: header vuoto), quindi Chrome applicava la freshness euristica (circa il 10% dell'età del file) e riusava i vecchi asset per ore. Il file servito era già corretto (26.713 byte, `.stat-card` presente): non era un problema di contenuto ma di cache. Con `no-cache` il browser conserva i file ma li rivalida a ogni richiesta (304 se invariati), quindi non ci sono più render misti.
 **Alternative scartate:** `max-age` breve (lascia finestre di incoerenza), `no-store` (disabilita del tutto la cache, inutile per asset statici).
 
+## D-014 - Calendario settimanale: da griglia vuota a calendario operativo - 23/09/2026 - Cline
+
+**Decisione:** riscritta `renderCalendar()` e la toolbar; rimosso il duplicato morto di `renderCalendar` e i quattro listener no-op rimasti in fondo a `app.js`; spostata la selezione multipla dal `checkbox` in linea (che rubava 20px al titolo) a una casella sovrapposta nell'angolo del blocco.
+**Motivazione:** la settimana era disegnata come 1440px di griglia sempre estesa, con l'utente costretto a scorrere fino alle 09:00, titoli tagliati (colonna 106px, `checkbox` in linea) e orari invisibili. Interventi, con le misure rilevate dal DOM:
+- **schermatura della settimana** (`max-height: min(64vh, 620px)`) e **scorrimento automatico** al primo evento (o alle 08:00 se la settimana è vuota), applicato solo al cambio settimana per non annullare lo scorrimento scelto dall'utente;
+- **auto-contenimento evita 1440px di pagina** e rende l'header e l'asse delle ore `sticky`;
+- **corsie affiancate**: gli eventi sovrapposti (`Brief con il fornitore` 14:00-15:00 e `Standup marketing` 14:30-15:15) occupano ora metà colonna ciascuno invece di pestarsi (49px ciascuno, `sovrapposizioniVisive: []`);
+- **eventi di giornata intera**: prima venivano scartati in silenzio (`allDayResi: 0` con 8 eventi inviati e 7 resi). Ora hanno una banda dedicata; `list_events` non filtra nulla, era il frontend a perderli;
+- **bug di un giorno**: `calendarDateKey()` usava `toISOString()`, che converte in UTC: con Roma a UTC+2 la cella di mercoledì produceva la chiave `2026-09-22`, quindi l'evidenziazione "oggi" cadeva su giovedì. Ora usa data locale;
+- **linea dell'ora corrente** nella colonna di oggi, ore fuori ufficio attenuate, header con `MER 23` (oggi) allineato a Google Calendar;
+- **titolo con orario** (nascosto sotto i 46 minuti) e casella di selezione nell'angolo;
+- **toolbar**: frecce raggruppate, `Elimina selezionati` neutro finché non c'è selezione (prima era rosso pieno ma disabilitato, e competeva con `+ Nuova serie` nel punto di massima attenzione).
+**Come è stato verificato:** banco di prova locale (copia della pagina con `fetch` e Supabase intercettati, eventi realistici) e probe automatico che ha controllato colonna "oggi", all-day, corsie, header sticky, selezione multipla, navigazione a 7 giorni (`21 - 27 set` → `28 set - 4 ott`), apertura editor e auto-scroll. Reso a 2048/1440/900px.
+**Alternative scartate:** griglia a zoom variabile (complessità per un proof of concept), filtrare gli eventi all-day dal backend (li perderebbe anche il Content Radar).
+

@@ -137,88 +137,217 @@ async function loadOpportunities(targetId = 'today-opportunities') {
     container.appendChild(emptyState('Radar non disponibile', error.message));
   }
 }
-function calendarDateKey(date) { return date.toISOString().slice(0, 10); }
+function calendarDateKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
 function localDateTimeValue(date, hour) { const copy = new Date(date); copy.setHours(hour, 0, 0, 0); const offset = copy.getTimezoneOffset() * 60000; return new Date(copy.getTime() - offset).toISOString().slice(0, 16); }
 function openCalendarPlanner(date) { const planner = $('calendar-planner'); if (!planner) return; planner.classList.remove('hidden'); $('schedule-start').value = localDateTimeValue(date, 9); $('schedule-end').value = localDateTimeValue(date, 10); const weekday = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][date.getDay()]; document.querySelectorAll('input[name="schedule-day"]').forEach(input => { input.checked = input.value === weekday; }); planner.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 function weekStart(date) { const start = new Date(date); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); return start; }
 function formatEventInput(raw) { if (!raw) return ''; if (raw.length === 10) return `${raw}T09:00`; const date = new Date(raw); const offset = date.getTimezoneOffset() * 60000; return new Date(date.getTime() - offset).toISOString().slice(0, 16); }
 function openEventEditor(calendarEvent) { let editor = $('calendar-event-editor'); if (!editor) { editor = document.createElement('section'); editor.id = 'calendar-event-editor'; editor.className = 'calendar-event-editor panel'; $('calendar-grid').parentNode.after(editor); } editor.innerHTML = '<div class="panel-heading"><div><span class="step">EVENTO</span><h2>Modifica evento</h2></div><button class="icon-button" type="button" id="close-event-editor" aria-label="Chiudi">&times;</button></div><form id="calendar-edit-form" class="event-edit-form"><label>Titolo<input id="edit-event-title" type="text" required></label><label>Descrizione<textarea id="edit-event-description" rows="3"></textarea></label><div class="schedule-time"><label>Inizio<input id="edit-event-start" type="datetime-local" required></label><label>Fine<input id="edit-event-end" type="datetime-local" required></label></div><div class="event-editor-actions"><button class="btn btn-danger" id="delete-event-button" type="button">Elimina</button><button class="btn btn-primary" type="submit">Salva modifiche</button></div><div id="event-editor-status" class="status-msg hidden"></div></form>'; $('edit-event-title').value = calendarEvent.summary || ''; $('edit-event-description').value = calendarEvent.description || ''; $('edit-event-start').value = formatEventInput(calendarEvent.start?.dateTime || calendarEvent.start?.date); $('edit-event-end').value = formatEventInput(calendarEvent.end?.dateTime || calendarEvent.end?.date); $('close-event-editor').onclick = () => editor.remove(); $('delete-event-button').onclick = () => { if (window.confirm(`Eliminare '${calendarEvent.summary || 'Evento'}'?`)) deleteCalendarEvent(calendarEvent.id).then(() => editor.remove()); }; $('calendar-edit-form').onsubmit = async event => { event.preventDefault(); const message = $('event-editor-status'); try { const response = await fetch(`/api/calendar/events/${encodeURIComponent(calendarEvent.id)}`, { method: 'PATCH', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ title: $('edit-event-title').value.trim(), description: $('edit-event-description').value.trim(), start: `${$('edit-event-start').value}:00`, end: `${$('edit-event-end').value}:00` }) }); const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Modifica non riuscita.'); message.textContent = 'Evento aggiornato.'; message.className = 'status-msg success'; await loadCalendarMonth(); await loadOpportunities('opportunity-list'); } catch (error) { message.textContent = error.message; message.className = 'status-msg error'; } }; editor.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-function renderCalendar(events = []) { const grid = $('calendar-grid'); if (!grid) return; const start = weekStart(calendarMonth); const end = new Date(start); end.setDate(end.getDate() + 7); $('calendar-month-label').textContent = `${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(end - 86400000).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`; grid.replaceChildren(); const header = document.createElement('div'); header.className = 'calendar-week-header'; header.innerHTML = '<span></span>'; for (let index = 0; index < 7; index += 1) { const date = new Date(start); date.setDate(start.getDate() + index); const day = document.createElement('span'); day.className = calendarDateKey(date) === calendarDateKey(new Date()) ? 'is-today' : ''; day.textContent = date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' }); header.appendChild(day); } const body = document.createElement('div'); body.className = 'calendar-week-body'; const timeAxis = document.createElement('div'); timeAxis.className = 'calendar-time-axis'; for (let hour = 0; hour < 24; hour += 1) { const label = document.createElement('span'); label.textContent = `${String(hour).padStart(2, '0')}:00`; timeAxis.appendChild(label); } body.appendChild(timeAxis); for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) { const column = document.createElement('div'); column.className = 'calendar-day-column'; column.addEventListener('click', event => { if (event.target === column) { const rect = column.getBoundingClientRect(); const date = new Date(start); date.setDate(start.getDate() + dayIndex); date.setHours(Math.min(23, Math.floor((event.clientY - rect.top) / 60)), 0, 0, 0); openCalendarPlanner(date); } }); body.appendChild(column); } events.forEach(calendarEvent => { const rawStart = calendarEvent.start?.dateTime || calendarEvent.start?.date; if (!rawStart || !calendarEvent.start?.dateTime) return; const eventDate = new Date(rawStart); const dayIndex = Math.floor((new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()) - new Date(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000); if (dayIndex < 0 || dayIndex > 6) return; const rawEnd = calendarEvent.end?.dateTime || rawStart; const duration = Math.max(30, (new Date(rawEnd) - eventDate) / 60000); const eventCard = document.createElement('button'); eventCard.type = 'button'; eventCard.className = 'calendar-timed-event'; eventCard.style.top = `${eventDate.getHours() * 60 + eventDate.getMinutes()}px`; eventCard.style.height = `${Math.min(1380, duration)}px`; eventCard.textContent = calendarEvent.summary || 'Evento'; eventCard.title = 'Modifica evento'; eventCard.onclick = event => { event.stopPropagation(); openEventEditor(calendarEvent); }; body.children[dayIndex + 1].appendChild(eventCard); }); grid.append(header, body); updateBulkDeleteButton(); }
 async function deleteCalendarEvent(eventId) { try { const response = await fetch(`/api/calendar/events/${encodeURIComponent(eventId)}`, { method: 'DELETE', headers: await authHeaders() }); const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Eliminazione non riuscita.'); await loadCalendarMonth(); await loadOpportunities('opportunity-list'); } catch (error) { status('workspace-status', error.message, 'error'); } }
+function formatEventHour(minutes) {
+  const hours = Math.floor(minutes / 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function packOverlappingEvents(items) {
+  const sorted = items.sort((a, b) => a.startMinutes - b.startMinutes || b.endMinutes - a.endMinutes);
+  const packed = [];
+  let cluster = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    const laneEnds = [];
+    cluster.forEach(item => {
+      let lane = laneEnds.findIndex(end => end <= item.startMinutes);
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(0); }
+      laneEnds[lane] = item.endMinutes;
+      item.lane = lane;
+    });
+    cluster.forEach(item => { item.lanes = laneEnds.length; });
+    packed.push(...cluster);
+    cluster = [];
+    clusterEnd = -1;
+  };
+  sorted.forEach(item => {
+    if (cluster.length && item.startMinutes >= clusterEnd) flush();
+    cluster.push(item);
+    clusterEnd = Math.max(clusterEnd, item.endMinutes);
+  });
+  if (cluster.length) flush();
+  return packed;
+}
+
+function createSelectionCheckbox(calendarEvent) {
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'calendar-select';
+  checkbox.checked = selectedCalendarEvents.has(calendarEvent.id);
+  checkbox.setAttribute('aria-label', `Seleziona ${calendarEvent.summary || 'evento'}`);
+  checkbox.addEventListener('click', event => event.stopPropagation());
+  checkbox.addEventListener('change', event => {
+    if (event.target.checked) selectedCalendarEvents.add(calendarEvent.id);
+    else selectedCalendarEvents.delete(calendarEvent.id);
+    updateBulkDeleteButton();
+  });
+  return checkbox;
+}
+
 function renderCalendar(events = []) {
   const grid = $('calendar-grid');
   if (!grid) return;
-  const start = weekStart(calendarMonth);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 7);
-  $('calendar-month-label').textContent = `${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - ${new Date(end - 86400000).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const weekStartDate = weekStart(calendarMonth);
+  const weekEndDate = new Date(weekStartDate);
+  weekEndDate.setDate(weekStartDate.getDate() + 7);
+  const lastDay = new Date(weekEndDate - 86400000);
+  const label = $('calendar-month-label');
+  if (label) {
+    const rangeFormat = weekStartDate.getMonth() === lastDay.getMonth() ? { day: 'numeric' } : { day: 'numeric', month: 'short' };
+    label.textContent = `${weekStartDate.toLocaleDateString('it-IT', rangeFormat)} - ${lastDay.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  }
+  const dayCells = [];
+  for (let index = 0; index < 7; index += 1) {
+    const date = new Date(weekStartDate);
+    date.setDate(weekStartDate.getDate() + index);
+    dayCells.push({ index, date, key: calendarDateKey(date) });
+  }
+  const todayKey = calendarDateKey(new Date());
   grid.replaceChildren();
+
   const header = document.createElement('div');
   header.className = 'calendar-week-header';
-  header.innerHTML = '<span></span>';
-  for (let index = 0; index < 7; index += 1) {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    const day = document.createElement('span');
-    day.className = calendarDateKey(date) === calendarDateKey(new Date()) ? 'is-today' : '';
-    day.textContent = date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
-    header.appendChild(day);
+  header.appendChild(document.createElement('span'));
+  dayCells.forEach(cell => {
+    const head = document.createElement('div');
+    head.className = cell.key === todayKey ? 'calendar-day-head is-today' : 'calendar-day-head';
+    const name = document.createElement('span');
+    name.className = 'calendar-day-name';
+    name.textContent = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'][cell.index];
+    const number = document.createElement('span');
+    number.className = 'calendar-day-number';
+    number.textContent = String(cell.date.getDate());
+    head.append(name, number);
+    header.appendChild(head);
+  });
+  grid.appendChild(header);
+
+  const timedEvents = events.filter(calendarEvent => calendarEvent?.start?.dateTime);
+  const allDayEvents = events.filter(calendarEvent => calendarEvent?.start?.date && !calendarEvent.start.dateTime);
+
+  if (allDayEvents.length) {
+    const band = document.createElement('div');
+    band.className = 'calendar-allday';
+    const bandLabel = document.createElement('span');
+    bandLabel.className = 'calendar-allday-label';
+    bandLabel.textContent = 'Tutto il giorno';
+    band.appendChild(bandLabel);
+    dayCells.forEach(cell => {
+      const slot = document.createElement('div');
+      slot.className = 'calendar-allday-day';
+      allDayEvents.forEach(calendarEvent => {
+        const startDate = new Date(`${calendarEvent.start.date}T00:00:00`);
+        const endDate = calendarEvent.end?.date ? new Date(`${calendarEvent.end.date}T00:00:00`) : new Date(startDate.getTime() + 86400000);
+        if (cell.date < startDate || cell.date >= endDate) return;
+        const item = document.createElement('div');
+        item.className = 'calendar-allday-item';
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'calendar-allday-chip';
+        chip.textContent = calendarEvent.summary || 'Evento';
+        chip.title = 'Modifica evento';
+        chip.addEventListener('click', event => { event.stopPropagation(); openEventEditor(calendarEvent); });
+        item.append(createSelectionCheckbox(calendarEvent), chip);
+        slot.appendChild(item);
+      });
+      band.appendChild(slot);
+    });
+    grid.appendChild(band);
   }
+
   const body = document.createElement('div');
   body.className = 'calendar-week-body';
   const timeAxis = document.createElement('div');
   timeAxis.className = 'calendar-time-axis';
   for (let hour = 0; hour < 24; hour += 1) {
-    const label = document.createElement('span');
-    label.textContent = `${String(hour).padStart(2, '0')}:00`;
-    timeAxis.appendChild(label);
+    const tick = document.createElement('span');
+    tick.textContent = `${String(hour).padStart(2, '0')}:00`;
+    timeAxis.appendChild(tick);
   }
   body.appendChild(timeAxis);
-  for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+
+  const columns = [];
+  dayCells.forEach(cell => {
     const column = document.createElement('div');
-    column.className = 'calendar-day-column';
+    column.className = cell.key === todayKey ? 'calendar-day-column is-today' : 'calendar-day-column';
     column.addEventListener('click', event => {
       if (event.target !== column) return;
       const rect = column.getBoundingClientRect();
-      const date = new Date(start);
-      date.setDate(start.getDate() + dayIndex);
-      date.setHours(Math.min(23, Math.floor((event.clientY - rect.top) / 60)), 0, 0, 0);
+      const date = new Date(cell.date);
+      date.setHours(Math.min(23, Math.max(0, Math.floor((event.clientY - rect.top) / 60))), 0, 0, 0);
       openCalendarPlanner(date);
     });
+    columns.push(column);
     body.appendChild(column);
-  }
-  events.forEach(calendarEvent => {
-    if (!calendarEvent.start?.dateTime) return;
-    const eventDate = new Date(calendarEvent.start.dateTime);
-    const dayIndex = Math.floor((new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()) - new Date(start.getFullYear(), start.getMonth(), start.getDate())) / 86400000);
-    if (dayIndex < 0 || dayIndex > 6) return;
-    const eventEnd = new Date(calendarEvent.end?.dateTime || calendarEvent.start.dateTime);
-    const duration = Math.max(30, (eventEnd - eventDate) / 60000);
-    const row = document.createElement('div');
-    row.className = 'calendar-timed-event-row';
-    row.style.top = `${eventDate.getHours() * 60 + eventDate.getMinutes()}px`;
-    row.style.height = `${Math.min(1380, duration)}px`;
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = selectedCalendarEvents.has(calendarEvent.id);
-    checkbox.setAttribute('aria-label', `Seleziona ${calendarEvent.summary || 'evento'}`);
-    checkbox.addEventListener('click', event => event.stopPropagation());
-    checkbox.addEventListener('change', event => {
-      if (event.target.checked) selectedCalendarEvents.add(calendarEvent.id);
-      else selectedCalendarEvents.delete(calendarEvent.id);
-      updateBulkDeleteButton();
-    });
-    const eventCard = document.createElement('button');
-    eventCard.type = 'button';
-    eventCard.className = 'calendar-timed-event';
-    eventCard.textContent = calendarEvent.summary || 'Evento';
-    eventCard.title = 'Modifica evento';
-    eventCard.addEventListener('click', event => { event.stopPropagation(); openEventEditor(calendarEvent); });
-    row.append(checkbox, eventCard);
-    body.children[dayIndex + 1].appendChild(row);
   });
-  grid.append(header, body);
+
+  let earliestMinutes = null;
+  dayCells.forEach(cell => {
+    const nextDay = new Date(cell.date);
+    nextDay.setDate(cell.date.getDate() + 1);
+    const items = timedEvents.filter(calendarEvent => {
+      const eventStart = new Date(calendarEvent.start.dateTime);
+      return eventStart >= cell.date && eventStart < nextDay;
+    }).map(calendarEvent => {
+      const eventStart = new Date(calendarEvent.start.dateTime);
+      const eventEnd = new Date(calendarEvent.end?.dateTime || calendarEvent.start.dateTime);
+      const startMinutes = eventStart.getHours() * 60 + eventStart.getMinutes();
+      const rawEnd = eventEnd > nextDay ? 1440 : eventEnd.getHours() * 60 + eventEnd.getMinutes();
+      return { calendarEvent, startMinutes, endMinutes: Math.min(1440, Math.max(startMinutes + 30, rawEnd)) };
+    });
+    packOverlappingEvents(items).forEach(item => {
+      const duration = item.endMinutes - item.startMinutes;
+      const laneWidth = 100 / item.lanes;
+      const row = document.createElement('div');
+      row.className = duration < 46 ? 'calendar-timed-event-row is-compact' : 'calendar-timed-event-row';
+      row.style.top = `${item.startMinutes}px`;
+      row.style.height = `${duration}px`;
+      row.style.left = `${item.lane * laneWidth}%`;
+      row.style.width = `${laneWidth}%`;
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'calendar-timed-event';
+      card.title = `${formatEventHour(item.startMinutes)} - ${formatEventHour(item.endMinutes)} ${item.calendarEvent.summary || 'Evento'}`;
+      card.addEventListener('click', event => { event.stopPropagation(); openEventEditor(item.calendarEvent); });
+      const title = document.createElement('strong');
+      title.textContent = item.calendarEvent.summary || 'Evento';
+      const time = document.createElement('span');
+      time.className = 'calendar-event-time';
+      time.textContent = `${formatEventHour(item.startMinutes)} - ${formatEventHour(item.endMinutes)}`;
+      card.append(title, time);
+      row.append(card, createSelectionCheckbox(item.calendarEvent));
+      columns[cell.index].appendChild(row);
+      if (earliestMinutes === null || item.startMinutes < earliestMinutes) earliestMinutes = item.startMinutes;
+    });
+    if (cell.key === todayKey) {
+      const now = new Date();
+      const marker = document.createElement('div');
+      marker.className = 'calendar-now';
+      marker.style.top = `${now.getHours() * 60 + now.getMinutes()}px`;
+      const dot = document.createElement('span');
+      dot.className = 'calendar-now-dot';
+      marker.appendChild(dot);
+      columns[cell.index].appendChild(marker);
+    }
+  });
+
+  grid.appendChild(body);
+  grid.style.setProperty('--calendar-head-h', `${header.offsetHeight}px`);
   updateBulkDeleteButton();
+
+  // riporto la vista sulle ore lavorative solo quando cambia settimana, così non
+  // annullo lo scorrimento scelto dall'utente a ogni aggiornamento
+  if (grid.dataset.week !== calendarDateKey(weekStartDate)) {
+    grid.dataset.week = calendarDateKey(weekStartDate);
+    grid.scrollTop = earliestMinutes === null ? 8 * 60 : Math.max(0, earliestMinutes - 60);
+  }
 }
 async function deleteSelectedCalendarEvents() { const eventIds = [...selectedCalendarEvents]; if (!eventIds.length) return; if (!window.confirm(`Eliminare ${eventIds.length} eventi selezionati?`)) return; try { const response = await fetch('/api/calendar/events/bulk-delete', { method: 'POST', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ event_ids: eventIds }) }); const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Eliminazione multipla non riuscita.'); selectedCalendarEvents.clear(); await loadCalendarMonth(); await loadOpportunities('opportunity-list'); status('workspace-status', `${data.count} eventi eliminati.`, 'success'); } catch (error) { status('workspace-status', error.message, 'error'); } }
 function updateBulkDeleteButton() { const button = $('calendar-delete-selected'); if (!button) return; button.disabled = selectedCalendarEvents.size === 0; button.textContent = selectedCalendarEvents.size ? `Elimina selezionati (${selectedCalendarEvents.size})` : 'Elimina selezionati'; }
@@ -263,7 +392,62 @@ async function publishContent(id) { const response = await fetch(`/api/content/$
 async function syncGoogleCalendar(session) { if (!session?.provider_token) return; const response = await fetch('/api/calendar/connect', { method: 'POST', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ access_token: session.provider_token, refresh_token: session.provider_refresh_token || '' }) }); if (!response.ok) { const data = await readResponse(response); status('workspace-status', data.detail || 'Google Calendar non collegato.', 'error'); } }
 async function connectGoogle() { const { data: { session } } = await supabaseClient.auth.getSession(); if (!session) return status('workspace-status', 'Accedi prima con Google.', 'error'); if (!session.provider_token) return loginWithGoogle(); await syncGoogleCalendar(session); await loadOpportunities('opportunity-list'); status('workspace-status', 'Calendario aggiornato.', 'success'); }
 async function scheduleCalendarEvent(event) { event.preventDefault(); const form = event.currentTarget; const days = Array.from(form.querySelectorAll('input[name="schedule-day"]:checked')).map(input => input.value); const start = $('schedule-start').value; const end = $('schedule-end').value; if (!days.length) return status('calendar-schedule-status', 'Seleziona almeno un giorno.', 'error'); if (!start || !end || new Date(end) <= new Date(start)) return status('calendar-schedule-status', 'Controlla data e orario di inizio e fine.', 'error'); const button = form.querySelector('button[type="submit"]'); button.disabled = true; status('calendar-schedule-status', 'Creo la serie di eventi su Google Calendar...', 'loading'); try { const response = await fetch('/api/calendar/events/recurring', { method: 'POST', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ title: $('schedule-title').value.trim(), description: $('schedule-description').value.trim(), start: `${start}:00`, end: `${end}:00`, frequency: form.querySelector('input[name="schedule-frequency"]:checked').value, days, weeks: Number($('schedule-weeks').value) }) }); const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Pianificazione non riuscita.'); status('calendar-schedule-status', 'Serie di eventi pianificata su Google Calendar.', 'success'); await loadOpportunities('opportunity-list'); } catch (error) { status('calendar-schedule-status', error.message, 'error'); } finally { button.disabled = false; } }
-function setupCalendarShell() { const planner = $('calendar-planner'); if (!planner || document.querySelector('.calendar-shell')) return; const shell = document.createElement('div'); shell.className = 'calendar-shell panel'; shell.innerHTML = '<div class="calendar-toolbar"><button class="icon-button" id="calendar-previous" type="button" aria-label="Settimana precedente">&lt;</button><h2 id="calendar-month-label"></h2><button class="icon-button" id="calendar-next" type="button" aria-label="Settimana successiva">&gt;</button><button class="btn btn-secondary calendar-today" id="calendar-today" type="button">Oggi</button><button class="btn btn-danger" id="calendar-delete-selected" type="button" disabled>Elimina selezionati</button><button class="btn btn-primary" id="open-calendar-planner" type="button">+ Nuova serie</button></div><div id="calendar-grid" class="calendar-week-grid"></div>'; planner.parentNode.insertBefore(shell, planner); planner.classList.add('hidden'); $('calendar-previous').addEventListener('click', () => { calendarMonth.setDate(calendarMonth.getDate() - 7); loadCalendarMonth(); }); $('calendar-next').addEventListener('click', () => { calendarMonth.setDate(calendarMonth.getDate() + 7); loadCalendarMonth(); }); $('calendar-today').addEventListener('click', () => { calendarMonth = new Date(); loadCalendarMonth(); }); $('calendar-delete-selected').addEventListener('click', deleteSelectedCalendarEvents); $('open-calendar-planner').addEventListener('click', () => openCalendarPlanner(new Date())); }
+function setupCalendarShell() {
+  const planner = $('calendar-planner');
+  if (!planner || document.querySelector('.calendar-shell')) return;
+  const shell = document.createElement('div');
+  shell.className = 'calendar-shell panel';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'calendar-toolbar';
+  const nav = document.createElement('div');
+  nav.className = 'calendar-nav';
+  const previous = document.createElement('button');
+  previous.type = 'button';
+  previous.className = 'icon-button';
+  previous.id = 'calendar-previous';
+  previous.setAttribute('aria-label', 'Settimana precedente');
+  previous.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-5 6 5 6"/></svg>';
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.className = 'icon-button';
+  next.id = 'calendar-next';
+  next.setAttribute('aria-label', 'Settimana successiva');
+  next.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6l5 6-5 6"/></svg>';
+  const today = document.createElement('button');
+  today.type = 'button';
+  today.className = 'btn btn-secondary';
+  today.id = 'calendar-today';
+  today.textContent = 'Oggi';
+  nav.append(previous, next, today);
+  const label = document.createElement('h2');
+  label.id = 'calendar-month-label';
+  const actions = document.createElement('div');
+  actions.className = 'calendar-actions';
+  const removeSelected = document.createElement('button');
+  removeSelected.type = 'button';
+  removeSelected.className = 'btn btn-secondary';
+  removeSelected.id = 'calendar-delete-selected';
+  removeSelected.disabled = true;
+  removeSelected.textContent = 'Elimina selezionati';
+  const newSeries = document.createElement('button');
+  newSeries.type = 'button';
+  newSeries.className = 'btn btn-primary';
+  newSeries.id = 'open-calendar-planner';
+  newSeries.textContent = '+ Nuova serie';
+  actions.append(removeSelected, newSeries);
+  toolbar.append(nav, label, actions);
+  const grid = document.createElement('div');
+  grid.id = 'calendar-grid';
+  grid.className = 'calendar-week-grid';
+  shell.append(toolbar, grid);
+  planner.parentNode.insertBefore(shell, planner);
+  planner.classList.add('hidden');
+  previous.addEventListener('click', () => { calendarMonth.setDate(calendarMonth.getDate() - 7); loadCalendarMonth(); });
+  next.addEventListener('click', () => { calendarMonth.setDate(calendarMonth.getDate() + 7); loadCalendarMonth(); });
+  today.addEventListener('click', () => { calendarMonth = new Date(); loadCalendarMonth(); });
+  removeSelected.addEventListener('click', deleteSelectedCalendarEvents);
+  newSeries.addEventListener('click', () => openCalendarPlanner(new Date()));
+}
 async function connectMeta() { if (!supabaseClient) return status('workspace-status', 'Accedi prima con Google.', 'error'); const { data: { session } } = await supabaseClient.auth.getSession(); if (!session) return status('workspace-status', 'Accedi prima con Google.', 'error'); const response = await fetch('/api/auth/meta/start', { headers: { Authorization: `Bearer ${session.access_token}` } }); const data = await response.json(); if (!response.ok) return status('workspace-status', data.detail || 'Meta non configurato.', 'error'); window.location.href = data.url; }
 async function authHeaders() {
   if (!supabaseClient) return {};
@@ -313,10 +497,6 @@ $('photo-input').addEventListener('change', event => { selectedFiles = Array.fro
 $('copy-form').addEventListener('submit', generateCopy);
 $('google-connect').addEventListener('click', connectGoogle);
 $('calendar-schedule-form').addEventListener('submit', scheduleCalendarEvent);
-$('calendar-previous')?.addEventListener('click', () => { calendarMonth.setMonth(calendarMonth.getMonth() - 1); loadCalendarMonth(); });
-$('calendar-next')?.addEventListener('click', () => { calendarMonth.setMonth(calendarMonth.getMonth() + 1); loadCalendarMonth(); });
-$('calendar-today')?.addEventListener('click', () => { calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1); loadCalendarMonth(); });
-$('calendar-delete-selected')?.addEventListener('click', deleteSelectedCalendarEvents);
 $('close-calendar-planner')?.addEventListener('click', () => $('calendar-planner').classList.add('hidden'));
 $('refresh-content').addEventListener('click', loadContent);
 $('refresh-analytics').addEventListener('click', loadAnalytics);

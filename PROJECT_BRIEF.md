@@ -67,7 +67,7 @@ Flusso: browser → FastAPI (che serve anche `frontend/` e `/storage`) → Supab
 **Working**
 - Shell a sidebar collassabile (248px ↔ 68px, drawer sotto i 900px) e design system unico in `frontend/style.css`.
 - Analytics, Content Studio, coda bozze, radar, login Google, collegamento Meta.
-- Calendario settimanale: shell, griglia, editor eventi ed eliminazione multipla (corretto il 23/09/2026, vedi D-011).
+- Calendario settimanale operativo: schermata con scorrimento all'orario del primo evento, header e asse delle ore ancorati, eventi sovrapposti affiancati in corsie, banda per gli eventi di giornata intera, evidenziazione corretta del giorno corrente e linea dell'ora attuale (rifatto il 23/09/2026, vedi D-014).
 
 **Known issues**
 - Storage effimero su Vercel (vedi README, sezione "Limiti noti").
