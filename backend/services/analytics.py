@@ -1,7 +1,39 @@
-from backend.config import USE_MOCK
-from backend.adapters.mock_data import MOCK_POSTS_DATA
+import json
+import time
+
 from backend.adapters.instagram import fetch_graph_posts, fetch_graph_insights, process_media_assets
+from backend.adapters.mock_data import MOCK_POSTS_DATA
+from backend.config import EXPORTS_DIR, INSIGHTS_CACHE_TTL, USE_MOCK
 from backend.models import PostRecord, AnalyticsSummary
+
+
+CACHE_FILE = EXPORTS_DIR / "insights_cache.json"
+
+
+def _read_cache() -> dict:
+    if not CACHE_FILE.exists():
+        return {}
+    try:
+        return json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_cache(cache: dict) -> None:
+    try:
+        CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=True, indent=2), encoding="utf-8")
+    except OSError:
+        # La cache è solo un'ottimizzazione: se non è scrivibile l'analisi resta corretta.
+        pass
+
+
+def _insights_for(media_id: str, user_id: str | None, cache: dict) -> dict:
+    entry = cache.get(media_id)
+    if entry and entry.get("expires_at", 0) > time.time():
+        return entry.get("insights", {})
+    insights = fetch_graph_insights(media_id, user_id=user_id)
+    cache[media_id] = {"expires_at": int(time.time()) + INSIGHTS_CACHE_TTL, "insights": insights}
+    return insights
 
 
 def diagnose_post(row: dict, averages: dict) -> tuple:
@@ -24,12 +56,13 @@ def diagnose_post(row: dict, averages: dict) -> tuple:
 def calculate_analytics(user_id: str | None = None) -> AnalyticsSummary:
     # La stessa pipeline funziona con dati demo o con la risposta di Meta.
     raw_posts = MOCK_POSTS_DATA if USE_MOCK else fetch_graph_posts(user_id=user_id)
+    insights_cache = {} if USE_MOCK else _read_cache()
     if not raw_posts:
         return AnalyticsSummary(total_posts=0, avg_engagement_rate=0, avg_save_rate=0, avg_conversation_rate=0, total_reach=0, top_post_id="", posts=[])
 
     parsed_items = []
     for post in raw_posts:
-        insights = post.get("insights", {}) if USE_MOCK else fetch_graph_insights(post["id"], user_id=user_id)
+        insights = post.get("insights", {}) if USE_MOCK else _insights_for(post["id"], user_id, insights_cache)
         reach = insights.get("reach", 0)
         likes = post.get("like_count", 0)
         comments = post.get("comments_count", 0)
@@ -64,6 +97,8 @@ def calculate_analytics(user_id: str | None = None) -> AnalyticsSummary:
             save_rate=item["save_rate"], conversation_rate=item["conv_rate"], strengths=strengths,
             weaknesses=weaknesses, local_files=item["local_files"], permalink=item["permalink"]
         ))
+    if not USE_MOCK:
+        _write_cache(insights_cache)
     records.sort(key=lambda record: record.engagement_rate, reverse=True)
     return AnalyticsSummary(
         total_posts=count, avg_engagement_rate=round(averages["er"], 2),

@@ -1,22 +1,13 @@
 import time
-from urllib.parse import urlencode
-
 import requests
 
-from backend.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+from backend.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
 
 
-SCOPES = "openid email profile https://www.googleapis.com/auth/calendar.events"
-OAUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+# Il consenso OAuth Google è gestito da Supabase Auth nel frontend: qui restano
+# solo il rinnovo del token e le chiamate alla Calendar API.
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 CALENDAR_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
-
-
-def authorization_url(state: str) -> str:
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        raise RuntimeError("Configura GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET nelle variabili d'ambiente di Vercel.")
-    params = {"client_id": GOOGLE_CLIENT_ID, "redirect_uri": GOOGLE_REDIRECT_URI, "response_type": "code", "scope": SCOPES, "access_type": "offline", "prompt": "consent", "state": state}
-    return f"{OAUTH_URL}?{urlencode(params)}"
 
 
 def _save_token(user_id: str, token: dict) -> None:
@@ -30,14 +21,6 @@ def _save_token(user_id: str, token: dict) -> None:
     )
     if response.status_code not in {200, 201}:
         raise RuntimeError("Impossibile salvare il collegamento Google Calendar su Supabase.")
-
-
-def exchange_code(code: str, user_id: str) -> None:
-    response = requests.post(TOKEN_URL, data={"code": code, "client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "redirect_uri": GOOGLE_REDIRECT_URI, "grant_type": "authorization_code"}, timeout=30)
-    response.raise_for_status()
-    token = response.json()
-    token["expires_at"] = int(time.time()) + token.get("expires_in", 3600)
-    _save_token(user_id, token)
 
 
 def save_provider_token(user_id: str, access_token: str, refresh_token: str = "") -> None:
@@ -59,6 +42,23 @@ def has_connection(user_id: str) -> bool:
     return bool(response.json())
 
 
+def _refresh_token(refresh_token: str) -> dict:
+    response = requests.post(
+        TOKEN_URL,
+        data={"client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "refresh_token": refresh_token, "grant_type": "refresh_token"},
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        detail = response.text[:200]
+        try:
+            payload = response.json()
+            detail = payload.get("error_description") or payload.get("error") or detail
+        except ValueError:
+            pass
+        raise RuntimeError(f"Google ha rifiutato il rinnovo del token: {detail}. Ricollega il calendario.")
+    return response.json()
+
+
 def _access_token(user_id: str) -> str:
     response = requests.get(
         f"{SUPABASE_URL}/rest/v1/google_connections",
@@ -71,10 +71,12 @@ def _access_token(user_id: str) -> str:
     if not rows:
         raise RuntimeError("Collega prima Google Calendar")
     token = rows[0]
-    if token.get("expires_at", 0) <= time.time() + 60 and token.get("refresh_token"):
-        response = requests.post(TOKEN_URL, data={"client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET, "refresh_token": token["refresh_token"], "grant_type": "refresh_token"}, timeout=30)
-        response.raise_for_status()
-        token.update(response.json())
+    if token.get("expires_at", 0) <= time.time() + 60:
+        if not token.get("refresh_token"):
+            # Senza refresh token il collegamento è definitivamente scaduto: meglio
+            # dirlo subito invece di inviare a Google un token non più valido.
+            raise RuntimeError("Il collegamento a Google Calendar è scaduto: ricollega il calendario.")
+        token.update(_refresh_token(token["refresh_token"]))
         token["expires_at"] = int(time.time()) + token.get("expires_in", 3600)
         _save_token(user_id, token)
     return token["access_token"]

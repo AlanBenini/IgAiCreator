@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import time
 from urllib.parse import urlencode
 
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from backend.config import BASE_DIR, STORAGE_DIR
+from backend.config import BASE_DIR, CORS_ORIGINS, STORAGE_DIR
 from backend.models import AnalyticsSummary, AssetRecord, CalendarBulkDeleteRequest, CalendarEventRequest, CalendarEventResponse, CalendarScheduleRequest, CalendarUpdateRequest, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, GoogleTokenRequest, Opportunity
 from backend.services.assets import asset_public_url, list_assets, save_uploads
 from backend.services.analytics import calculate_analytics
@@ -24,10 +25,14 @@ from backend.adapters.google_calendar import create_event, create_recurring_even
 
 app = FastAPI(title="Instagram Content Engine API", version="2.0.0")
 
+# Il frontend è servito dallo stesso dominio del backend: nessuna origine esterna
+# è autorizzata per default. Valorizza CORS_ORIGINS per domini diversi.
+ALLOW_ANY_ORIGIN = CORS_ORIGINS == ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    # Wildcard insieme alle credenziali non è valido: questa API usa Bearer token, non cookie.
+    allow_credentials=bool(CORS_ORIGINS) and not ALLOW_ANY_ORIGIN,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -89,6 +94,40 @@ def _supabase_user(request: Request) -> str:
     if response.status_code != 200:
         raise HTTPException(status_code=401, detail="Sessione non valida.")
     return response.json()["id"]
+
+
+# Quando Supabase non è configurato (sviluppo locale) il workspace resta usabile
+# senza login; quando lo è, ogni endpoint protetto esige un token valido.
+AUTH_REQUIRED = bool(SUPABASE_URL and SUPABASE_ANON_KEY)
+
+
+def require_user(request: Request) -> str | None:
+    """Utente Supabase corrente, oppure None se il login non è configurato."""
+    if not AUTH_REQUIRED:
+        return None
+    return _supabase_user(request)
+
+
+def require_login(request: Request) -> str:
+    user_id = require_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Accedi prima con Google.")
+    return user_id
+
+
+def require_calendar_user(request: Request) -> str:
+    user_id = require_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Accedi prima con Google Calendar.")
+    return user_id
+
+
+if USE_MOCK:
+    print("[MOMENT] USE_MOCK attivo: analytics e pubblicazione usano i post demo.")
+if os.getenv("VERCEL"):
+    print("[MOMENT] Storage serverless (/tmp) effimero: upload, bozze e media non sopravvivono tra le invocazioni.")
+if not AUTH_REQUIRED:
+    print("[MOMENT] Supabase non configurato: gli endpoint protetti accettano chiamate anonime (solo sviluppo locale).")
 
 
 def _resolve_meta_instagram_id(page: dict, page_access_token: str) -> str:
@@ -166,7 +205,7 @@ def _save_meta_connection(user_id: str, page: dict, instagram_id: str) -> None:
 
 @app.get("/api/auth/meta/start")
 def meta_auth_start(request: Request):
-    user_id = _supabase_user(request)
+    user_id = require_login(request)
     if not META_APP_ID or not META_APP_SECRET:
         raise HTTPException(status_code=503, detail="Configura META_APP_ID e META_APP_SECRET su Vercel.")
     params = {
@@ -213,12 +252,12 @@ def meta_auth_callback(code: str = Query(...), state: str = Query(...)):
 
 @app.get("/api/analytics", response_model=AnalyticsSummary)
 def get_analytics(request: Request):
-    user_id = _supabase_user(request) if request.headers.get("authorization") else None
-    return calculate_analytics(user_id=user_id)
+    return calculate_analytics(user_id=require_user(request))
 
 
 @app.post("/api/generate-copy", response_model=CopyGenerationResponse)
-async def generate_copy(files: list[UploadFile] = File(...), theme: str | None = Form(default=None), content_format: str = Form(default="instagram_post"), title: str = Form(default="Nuovo contenuto")):
+async def generate_copy(request: Request, files: list[UploadFile] = File(...), theme: str | None = Form(default=None), content_format: str = Form(default="instagram_post"), title: str = Form(default="Nuovo contenuto")):
+    require_user(request)
     assets = await save_uploads(files)
     try:
         copies = generate_copies(assets, theme, content_format)
@@ -229,13 +268,14 @@ async def generate_copy(files: list[UploadFile] = File(...), theme: str | None =
 
 
 @app.get("/api/assets", response_model=list[AssetRecord])
-def get_assets():
+def get_assets(request: Request):
+    require_user(request)
     return list_assets()
 
 
 @app.get("/api/opportunities", response_model=list[Opportunity])
 def get_opportunities(request: Request):
-    user_id = _supabase_user(request) if request.headers.get("authorization") else None
+    user_id = require_user(request)
     try:
         return build_opportunities(user_id)
     except (RuntimeError, requests.RequestException) as error:
@@ -244,7 +284,7 @@ def get_opportunities(request: Request):
 
 @app.get("/api/calendar/events")
 def get_calendar_events(request: Request, start: str = Query(...), end: str = Query(...)):
-    user_id = _supabase_user(request)
+    user_id = require_calendar_user(request)
     try:
         return list_events(user_id, start, end)
     except (RuntimeError, requests.RequestException) as error:
@@ -253,7 +293,7 @@ def get_calendar_events(request: Request, start: str = Query(...), end: str = Qu
 
 @app.delete("/api/calendar/events/{event_id}")
 def remove_calendar_event(event_id: str, request: Request):
-    user_id = _supabase_user(request)
+    user_id = require_calendar_user(request)
     try:
         delete_event(user_id, event_id)
     except (RuntimeError, requests.RequestException) as error:
@@ -263,7 +303,7 @@ def remove_calendar_event(event_id: str, request: Request):
 
 @app.post("/api/calendar/events/bulk-delete")
 def remove_calendar_events(payload: CalendarBulkDeleteRequest, request: Request):
-    user_id = _supabase_user(request)
+    user_id = require_calendar_user(request)
     try:
         deleted = delete_events(user_id, payload.event_ids)
     except (RuntimeError, requests.RequestException) as error:
@@ -273,7 +313,7 @@ def remove_calendar_events(payload: CalendarBulkDeleteRequest, request: Request)
 
 @app.patch("/api/calendar/events/{event_id}")
 def edit_calendar_event(event_id: str, payload: CalendarUpdateRequest, request: Request):
-    user_id = _supabase_user(request)
+    user_id = require_calendar_user(request)
     try:
         updated = update_event(user_id, event_id, payload.title, payload.description, payload.start, payload.end)
     except (RuntimeError, requests.RequestException) as error:
@@ -282,13 +322,15 @@ def edit_calendar_event(event_id: str, payload: CalendarUpdateRequest, request: 
 
 
 @app.get("/api/content", response_model=list[ContentDraft])
-def get_content():
+def get_content(request: Request):
+    require_user(request)
     return list_drafts()
 
 
 @app.patch("/api/content/{content_id}", response_model=ContentDraft)
-def approve_content(content_id: str, request: ContentStatusRequest):
-    return update_status(content_id, request.status)
+def approve_content(content_id: str, request: Request, payload: ContentStatusRequest):
+    require_user(request)
+    return update_status(content_id, payload.status)
 
 
 @app.post("/api/content/{content_id}/publish", response_model=ContentPublishResponse)
@@ -300,7 +342,7 @@ def publish_content(content_id: str, request: Request):
     if draft.status != "APPROVED":
         raise HTTPException(status_code=409, detail="Approva il contenuto prima di pubblicarlo.")
     caption = draft.copies[0].caption if draft.copies else ""
-    user_id = _supabase_user(request) if request.headers.get("authorization") else None
+    user_id = require_user(request)
     if USE_MOCK:
         update_status(content_id, "PUBLISHED")
         return ContentPublishResponse(id=content_id, status="PUBLISHED", platform_id=f"mock_{content_id[:8]}")
@@ -314,7 +356,7 @@ def publish_content(content_id: str, request: Request):
 
 @app.post("/api/calendar/connect")
 def calendar_connect(token: GoogleTokenRequest, request: Request):
-    user_id = _supabase_user(request)
+    user_id = require_login(request)
     try:
         save_provider_token(user_id, token.access_token, token.refresh_token)
     except RuntimeError as error:
@@ -324,7 +366,7 @@ def calendar_connect(token: GoogleTokenRequest, request: Request):
 
 @app.get("/api/calendar/status")
 def calendar_status(request: Request):
-    user_id = _supabase_user(request)
+    user_id = require_login(request)
     try:
         return {"connected": has_connection(user_id)}
     except requests.RequestException as error:
@@ -333,9 +375,7 @@ def calendar_status(request: Request):
 
 @app.post("/api/calendar/events", response_model=CalendarEventResponse)
 def calendar_event(event: CalendarEventRequest, request: Request):
-    user_id = _supabase_user(request)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Accedi prima con Google Calendar.")
+    user_id = require_calendar_user(request)
     try:
         created = create_event(user_id, event.title, event.description, event.start, event.end)
     except (RuntimeError, requests.RequestException) as error:
@@ -345,7 +385,7 @@ def calendar_event(event: CalendarEventRequest, request: Request):
 
 @app.post("/api/calendar/events/recurring", response_model=CalendarEventResponse)
 def calendar_recurring_event(event: CalendarScheduleRequest, request: Request):
-    user_id = _supabase_user(request)
+    user_id = require_calendar_user(request)
     try:
         created = create_recurring_event(user_id, event.title, event.description, event.start, event.end, event.frequency, event.days, event.weeks)
     except (RuntimeError, requests.RequestException) as error:
