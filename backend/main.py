@@ -38,6 +38,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def revalidate_static_files(request: Request, call_next):
+    # Senza Cache-Control i browser applicano la freshness euristica e possono
+    # riusare HTML/CSS/JS vecchi anche per ore dopo un aggiornamento. Qui si
+    # impone la rivalidazione: il file resta in cache ma viene confermato con 304.
+    response = await call_next(request)
+    response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 @app.get("/health", include_in_schema=False)
 def health_check():
     return {"status": "ok"}

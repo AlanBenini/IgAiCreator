@@ -65,14 +65,17 @@ Flusso: browser → FastAPI (che serve anche `frontend/` e `/storage`) → Supab
 ## 7. Current State
 
 **Working**
-- Analytics, Content Studio, coda bozze, calendario settimanale (inclusa eliminazione multipla), radar, login Google, collegamento Meta.
+- Shell a sidebar collassabile (248px ↔ 68px, drawer sotto i 900px) e design system unico in `frontend/style.css`.
+- Analytics, Content Studio, coda bozze, radar, login Google, collegamento Meta.
+- Calendario settimanale: shell, griglia, editor eventi ed eliminazione multipla (corretto il 23/09/2026, vedi D-011).
 
 **Known issues**
 - Storage effimero su Vercel (vedi README, sezione "Limiti noti").
 - Pubblicazione reale mai verificata end-to-end: serve un account IG business e un `PUBLIC_BASE_URL` raggiungibile da Meta.
+- Calendario e Meta sono verificabili solo con Supabase configurato: in locale restano stati vuoti.
 
 **Next**
-- Rifinitura della UI concordata con il committente.
+- Riscontro del committente vista per vista (Today, Opportunities, Content Studio, Performance).
 
 ## 8. Team and Handoff
 

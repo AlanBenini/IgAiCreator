@@ -4,29 +4,111 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MOMENT - AI Content Manager</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <header id="auth-bar" class="auth-bar"><div class="workspace-context"><span class="workspace-label">Workspace</span><span id="auth-status">Connessione in corso...</span></div><nav class="account-actions" aria-label="Account"><button id="login-google" class="btn btn-primary" type="button">Accedi con Google</button><button id="meta-connect" class="btn btn-secondary hidden" type="button">Collega Instagram</button><button id="logout" class="btn btn-secondary hidden" type="button">Esci</button></nav></header>
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="brand"><span class="brand-mark">M</span><div><h2>MOMENT</h2><span class="badge">AI content manager</span></div></div>
-      <nav class="nav" aria-label="Navigazione"><button class="nav-btn active" data-view="today">Today</button><button class="nav-btn" data-view="opportunities">Opportunities</button><button class="nav-btn" data-view="content">Content Studio</button><button class="nav-btn" data-view="performance">Performance</button></nav>
-      <div class="sidebar-footer"><span class="connection-dot"></span><span id="connection-status">Workspace locale</span></div>
+  <div class="app" id="app-shell">
+    <aside class="sidebar" id="app-sidebar" aria-label="Navigazione principale">
+      <div class="sidebar-head">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">M</span><span class="brand-text"><strong>MOMENT</strong><span>Content manager</span></span></div>
+        <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Comprimi il menu" aria-expanded="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-5 6 5 6"/></svg></button>
+      </div>
+      <nav class="sidebar-nav" aria-label="Sezioni">
+        <p class="nav-group">Lavoro</p>
+        <button class="nav-btn active" data-view="today" title="Today"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><span>Today</span></button>
+        <button class="nav-btn" data-view="opportunities" title="Opportunities"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg><span>Opportunities</span></button>
+        <button class="nav-btn" data-view="content" title="Content Studio"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17V6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5V17"/><path d="M3 20h18"/><path d="M9.5 11.2l2.5-2 2.5 2"/></svg><span>Content Studio</span></button>
+        <p class="nav-group">Analisi</p>
+        <button class="nav-btn" data-view="performance" title="Performance"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V4.5M4 19h16"/><path d="M8 15.5l3.5-4.2 2.7 2.3L19 8"/></svg><span>Performance</span></button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="sidebar-status"><span class="connection-dot" aria-hidden="true"></span><span id="connection-status">Workspace locale</span></div>
+        <div class="account-row">
+          <div class="who"><span class="avatar" aria-hidden="true">M</span><span id="auth-status">Connessione in corso...</span></div>
+          <div class="account-actions" aria-label="Account"><button id="login-google" class="btn btn-primary" type="button">Accedi con Google</button><button id="meta-connect" class="btn btn-secondary hidden" type="button">Collega Instagram</button><button id="logout" class="btn btn-secondary hidden" type="button">Esci</button></div>
+        </div>
+      </div>
     </aside>
-    <main class="main-content">
+    <div class="sidebar-backdrop hidden" id="sidebar-backdrop"></div>
+    <div class="workspace">
+      <header class="mobile-bar">
+        <button class="ghost-icon" id="sidebar-open" type="button" aria-label="Apri il menu"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+        <span class="mobile-bar-title">MOMENT</span>
+      </header>
+      <main class="main-content">
+
       <section id="view-today" class="view active">
-        <header class="section-header"><div><p class="eyebrow" id="today-date">Oggi</p><h1>Il tuo business succede.<br>Tu trasformalo in storia.</h1><p>La tua panoramica operativa: cosa richiede attenzione, cosa puoi raccontare e cosa sta funzionando.</p></div><button class="btn btn-primary" data-view-target="content">+ Nuovo contenuto</button></header>
-        <div class="today-grid"><article class="today-card today-focus"><p class="eyebrow">TODAY</p><h2>Un momento vale piu di un post.</h2><p>Collega il calendario per ricevere opportunita automatiche e brief di raccolta direttamente prima dei tuoi eventi.</p><button class="text-button" data-view-target="opportunities">Vedi le opportunita <span>-&gt;</span></button></article><article class="today-card"><span class="card-kicker">DA FARE</span><strong id="draft-count">0</strong><p>contenuti in attesa di approvazione</p><button class="text-button" data-view-target="content">Apri la coda <span>-&gt;</span></button></article><article class="today-card"><span class="card-kicker">REACH TOTALE</span><strong id="today-reach">0</strong><p>dagli ultimi contenuti analizzati</p><button class="text-button" data-view-target="performance">Guarda performance <span>-&gt;</span></button></article></div>
-        <div class="home-columns"><section><div class="section-line"><h2>Opportunita vicine</h2><button class="text-button" data-view-target="opportunities">Tutte -&gt;</button></div><div id="today-opportunities" class="opportunity-list"></div></section><section><div class="section-line"><h2>Ultimi contenuti</h2><button class="text-button" data-view-target="content">Content Studio -&gt;</button></div><div id="today-content" class="content-list"></div></section></div>
+        <header class="view-head">
+          <div>
+            <p class="eyebrow" id="today-date">Oggi</p>
+            <h1>Panoramica</h1>
+          </div>
+          <div class="view-actions"><button class="btn btn-primary" data-view-target="content">+ Nuovo contenuto</button></div>
+        </header>
+        <div class="stat-row">
+          <article class="stat-card">
+            <span class="stat-label">Calendario</span>
+            <strong class="stat-value" id="today-calendar-state">—</strong>
+            <p class="stat-hint" id="today-calendar-hint">Verifico il collegamento a Google Calendar...</p>
+            <button class="text-button" data-view-target="opportunities">Apri il Content Radar</button>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Da approvare</span>
+            <strong class="stat-value" id="draft-count">0</strong>
+            <p class="stat-hint">contenuti in attesa nella coda</p>
+            <button class="text-button" data-view-target="content">Apri la coda</button>
+          </article>
+          <article class="stat-card">
+            <span class="stat-label">Reach totale</span>
+            <strong class="stat-value" id="today-reach">0</strong>
+            <p class="stat-hint">sugli ultimi contenuti analizzati</p>
+            <button class="text-button" data-view-target="performance">Guarda Performance</button>
+          </article>
+        </div>
+        <div class="home-columns">
+          <section class="panel">
+            <div class="section-line"><h2>Opportunità vicine</h2><button class="text-button" data-view-target="opportunities">Tutte</button></div>
+            <div id="today-opportunities" class="opportunity-list"></div>
+          </section>
+          <section class="panel">
+            <div class="section-line"><h2>Ultimi contenuti</h2><button class="text-button" data-view-target="content">Content Studio</button></div>
+            <div id="today-content" class="content-list"></div>
+          </section>
+        </div>
       </section>
-      <section id="view-opportunities" class="view"><header class="section-header"><div><p class="eyebrow">CONTENT RADAR</p><h1>Ogni evento puo diventare contenuto.</h1><p>Il calendario aziendale diventa una sorgente di idee operative: priorita, motivo e brief per catturare il momento.</p></div><button class="btn btn-secondary" id="google-connect" type="button">Aggiorna calendario</button></header><div class="calendar-planner panel"><div class="panel-heading"><div><span class="step">PIANIFICAZIONE</span><h2>Crea una serie di eventi</h2></div><span class="file-hint">Google Calendar</span></div><form id="calendar-schedule-form" class="schedule-form"><div class="schedule-fields"><label for="schedule-title">Titolo evento<input id="schedule-title" type="text" placeholder="Es. Riunione editoriale" required></label><label for="schedule-description">Descrizione<span>facoltativa</span><textarea id="schedule-description" rows="2" placeholder="Aggiungi un contesto..." ></textarea></label><div class="schedule-time"><label for="schedule-start">Inizio<input id="schedule-start" type="datetime-local" required></label><label for="schedule-end">Fine<input id="schedule-end" type="datetime-local" required></label></div></div><div class="schedule-options"><fieldset><legend>Frequenza</legend><label class="radio-option"><input type="radio" name="schedule-frequency" value="weekly" checked> Ogni settimana</label><label class="radio-option"><input type="radio" name="schedule-frequency" value="biweekly"> Ogni 2 settimane</label></fieldset><fieldset><legend>Giorni</legend><div class="day-options"><label><input type="checkbox" name="schedule-day" value="MO"> Lun</label><label><input type="checkbox" name="schedule-day" value="TU"> Mar</label><label><input type="checkbox" name="schedule-day" value="WE"> Mer</label><label><input type="checkbox" name="schedule-day" value="TH"> Gio</label><label><input type="checkbox" name="schedule-day" value="FR"> Ven</label><label><input type="checkbox" name="schedule-day" value="SA"> Sab</label><label><input type="checkbox" name="schedule-day" value="SU"> Dom</label></div></fieldset><label for="schedule-weeks">Per quante settimane<select id="schedule-weeks"><option value="1">1 settimana</option><option value="2">2 settimane</option><option value="4" selected>4 settimane</option><option value="8">8 settimane</option><option value="12">12 settimane</option><option value="26">26 settimane</option><option value="52">52 settimane</option></select></label><button class="btn btn-primary" type="submit">Pianifica eventi</button></div></form><div id="calendar-schedule-status" class="status-msg hidden"></div></div><div id="opportunity-list" class="opportunity-grid"></div></section>
-      <section id="view-content" class="view"><header class="section-header"><div><p class="eyebrow">CONTENT STUDIO</p><h1>Raccogli. Crea. Approva.</h1><p>Carica il materiale reale dell'azienda e genera proposte pronte per Instagram.</p></div></header><form id="copy-form" class="workspace-grid"><div class="upload-panel panel"><div class="panel-heading"><div><span class="step">01</span><h2>Media library</h2></div><span class="file-hint">JPG, PNG, WEBP - max 20</span></div><label class="dropzone" for="photo-input"><input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple><span class="upload-icon">+</span><strong>Scegli foto e materiali</strong><span>oppure trascinali qui</span></label><div id="photo-preview" class="photo-preview"></div></div><div class="brief-panel panel"><div class="panel-heading"><div><span class="step">02</span><h2>Content brief</h2></div></div><label for="content-title">Titolo interno</label><input id="content-title" type="text" value="Nuovo momento aziendale"><label for="content-format">Formato</label><select id="content-format"><option value="instagram_post">Instagram post</option><option value="instagram_carousel">Instagram carousel</option><option value="instagram_reel">Instagram Reel</option><option value="instagram_story">Instagram Stories</option><option value="linkedin_post">LinkedIn post</option></select><label for="theme">Direzione creativa <span>facoltativo</span></label><textarea id="theme" rows="4" placeholder="Es. Racconta il dietro le quinte con tono concreto..."></textarea><button class="btn btn-primary" id="generate-button" type="submit">Analizza e crea <span>-&gt;</span></button></div></form><div id="workspace-status" class="status-msg hidden"></div><div id="copy-results" class="results-section hidden"><div class="results-heading"><div><p class="eyebrow">DRAFT QUEUE</p><h2>Contenuti da approvare</h2></div></div><div id="copy-container" class="copy-grid"></div></div><div class="section-line content-library-heading"><h2>Libreria contenuti</h2><button class="btn btn-secondary" id="refresh-content" type="button">Aggiorna</button></div><div id="content-library" class="content-list"></div></section>
-      <section id="view-performance" class="view"><header class="section-header"><div><p class="eyebrow">PERFORMANCE</p><h1>Cosa sta funzionando.</h1><p>Analytics Meta Graph API e diagnosi dei contenuti pubblicati.</p></div><button class="btn btn-secondary" id="refresh-analytics" type="button">Ricarica dati</button></header><div class="kpi-grid"><div class="kpi-card"><span class="kpi-label">Top Engagement Rate</span><span class="kpi-value" id="kpi-top-er">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Media ER</span><span class="kpi-value" id="kpi-avg-er">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Media salvataggi</span><span class="kpi-value" id="kpi-avg-save">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Reach totale</span><span class="kpi-value" id="kpi-reach">0</span></div></div><div class="charts-grid"><div class="chart-card"><h3>Engagement rate</h3><canvas id="chart-er"></canvas></div><div class="chart-card"><h3>Salvataggi vs conversazioni</h3><canvas id="chart-matrix"></canvas></div></div><div id="posts-container" class="posts-list"></div></section>
+      <section id="view-opportunities" class="view">
+          <header class="view-head">
+            <div>
+              <p class="eyebrow">Content Radar</p>
+              <h1>Opportunità dal calendario</h1>
+              <p>Eventi dei prossimi 30 giorni, con priorità e brief di raccolta.</p>
+            </div>
+            <div class="view-actions"><button class="btn btn-secondary" id="google-connect" type="button">Aggiorna calendario</button></div>
+          </header>
+          <div class="calendar-planner panel" id="calendar-planner">
+            <div class="panel-heading"><div><span class="step">PIANIFICAZIONE</span><h2>Crea una serie di eventi</h2></div><div class="panel-actions"><span class="file-hint">Google Calendar</span><button class="icon-button" id="close-calendar-planner" type="button" aria-label="Chiudi il pianificatore">&times;</button></div></div><form id="calendar-schedule-form" class="schedule-form"><div class="schedule-fields"><label for="schedule-title">Titolo evento<input id="schedule-title" type="text" placeholder="Es. Riunione editoriale" required></label><label for="schedule-description">Descrizione<span>facoltativa</span><textarea id="schedule-description" rows="2" placeholder="Aggiungi un contesto..." ></textarea></label><div class="schedule-time"><label for="schedule-start">Inizio<input id="schedule-start" type="datetime-local" required></label><label for="schedule-end">Fine<input id="schedule-end" type="datetime-local" required></label></div></div><div class="schedule-options"><fieldset><legend>Frequenza</legend><label class="radio-option"><input type="radio" name="schedule-frequency" value="weekly" checked> Ogni settimana</label><label class="radio-option"><input type="radio" name="schedule-frequency" value="biweekly"> Ogni 2 settimane</label></fieldset><fieldset><legend>Giorni</legend><div class="day-options"><label><input type="checkbox" name="schedule-day" value="MO"> Lun</label><label><input type="checkbox" name="schedule-day" value="TU"> Mar</label><label><input type="checkbox" name="schedule-day" value="WE"> Mer</label><label><input type="checkbox" name="schedule-day" value="TH"> Gio</label><label><input type="checkbox" name="schedule-day" value="FR"> Ven</label><label><input type="checkbox" name="schedule-day" value="SA"> Sab</label><label><input type="checkbox" name="schedule-day" value="SU"> Dom</label></div></fieldset><label for="schedule-weeks">Per quante settimane<select id="schedule-weeks"><option value="1">1 settimana</option><option value="2">2 settimane</option><option value="4" selected>4 settimane</option><option value="8">8 settimane</option><option value="12">12 settimane</option><option value="26">26 settimane</option><option value="52">52 settimane</option></select></label><button class="btn btn-primary" type="submit">Pianifica eventi</button></div></form><div id="calendar-schedule-status" class="status-msg hidden"></div></div><div id="opportunity-list" class="opportunity-grid"></div></section>
+      <section id="view-content" class="view">
+          <header class="view-head">
+            <div>
+              <p class="eyebrow">Content Studio</p>
+              <h1>Nuovo contenuto</h1>
+              <p>Carica i materiali, genera le proposte e approva la coda.</p>
+            </div>
+          </header><form id="copy-form" class="workspace-grid"><div class="upload-panel panel"><div class="panel-heading"><div><span class="step">01</span><h2>Media library</h2></div><span class="file-hint">JPG, PNG, WEBP - max 20</span></div><label class="dropzone" for="photo-input"><input id="photo-input" type="file" accept="image/jpeg,image/png,image/webp" multiple><span class="upload-icon">+</span><strong>Scegli foto e materiali</strong><span>oppure trascinali qui</span></label><div id="photo-preview" class="photo-preview"></div></div><div class="brief-panel panel"><div class="panel-heading"><div><span class="step">02</span><h2>Content brief</h2></div></div><label for="content-title">Titolo interno</label><input id="content-title" type="text" value="Nuovo momento aziendale"><label for="content-format">Formato</label><select id="content-format"><option value="instagram_post">Instagram post</option><option value="instagram_carousel">Instagram carousel</option><option value="instagram_reel">Instagram Reel</option><option value="instagram_story">Instagram Stories</option><option value="linkedin_post">LinkedIn post</option></select><label for="theme">Direzione creativa <span>facoltativo</span></label><textarea id="theme" rows="4" placeholder="Es. Racconta il dietro le quinte con tono concreto..."></textarea><button class="btn btn-primary" id="generate-button" type="submit">Analizza e crea <span>-&gt;</span></button></div></form><div id="workspace-status" class="status-msg hidden"></div><div id="copy-results" class="results-section hidden"><div class="results-heading"><div><p class="eyebrow">DRAFT QUEUE</p><h2>Contenuti da approvare</h2></div></div><div id="copy-container" class="copy-grid"></div></div><div class="section-line content-library-heading"><h2>Libreria contenuti</h2><button class="btn btn-secondary" id="refresh-content" type="button">Aggiorna</button></div><div id="content-library" class="content-list"></div></section>
+      <section id="view-performance" class="view">
+          <header class="view-head">
+            <div>
+              <p class="eyebrow">Performance</p>
+              <h1>Risultati dei contenuti</h1>
+              <p>Engagement, salvataggi e conversazioni sugli ultimi post.</p>
+            </div>
+            <div class="view-actions"><button class="btn btn-secondary" id="refresh-analytics" type="button">Ricarica dati</button></div>
+          </header><div class="kpi-grid"><div class="kpi-card"><span class="kpi-label">Top Engagement Rate</span><span class="kpi-value" id="kpi-top-er">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Media ER</span><span class="kpi-value" id="kpi-avg-er">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Media salvataggi</span><span class="kpi-value" id="kpi-avg-save">0.0%</span></div><div class="kpi-card"><span class="kpi-label">Reach totale</span><span class="kpi-value" id="kpi-reach">0</span></div></div><div class="charts-grid"><div class="chart-card"><h3>Engagement rate</h3><canvas id="chart-er"></canvas></div><div class="chart-card"><h3>Salvataggi vs conversazioni</h3><canvas id="chart-matrix"></canvas></div></div><div id="posts-container" class="posts-list"></div></section>
     </main>
+    </div>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
