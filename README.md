@@ -55,6 +55,12 @@ Esegui una volta nel SQL Editor del progetto: `supabase/meta_connections.sql` e 
 | `PATCH/DELETE` | `/api/calendar/events/{id}` | Modifica ed eliminazione singola |
 | `POST` | `/api/calendar/events/bulk-delete` | Fino a 100 eventi per chiamata |
 | `GET/POST` | `/api/calendar/status`, `/api/calendar/connect` | Stato e salvataggio del collegamento Google |
+| `GET/POST` | `/api/editorial/plans` | Elenca e crea piani con serie di post e riunioni su Google Calendar |
+| `GET` | `/api/editorial/suggestions` | Suggerimenti quando le riunioni ricorrono in almeno tre settimane distinte |
+| `DELETE` | `/api/editorial/plans/{plan_id}` | Rimuove il piano e le sue serie dal calendario |
+| `GET/POST` | `/api/publications` | Consulta la coda e programma un post con immagini e data/ora |
+| `DELETE` | `/api/publications/{publication_id}` | Annulla una pubblicazione ancora in coda |
+| `POST` | `/api/publications/run` | Elabora i post scaduti; richiede `CRON_SECRET` in produzione |
 
 ## Test
 

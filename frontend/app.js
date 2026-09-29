@@ -4,6 +4,13 @@ let selectedFiles = [];
 let supabaseClient = null;
 let calendarMonth = new Date();
 let selectedCalendarEvents = new Set();
+// Stato del piano editoriale e della coda di pubblicazione.
+let appConfig = { storage_ephemeral: false, scheduler_configured: false };
+let editorialSuggestions = [];
+let pendingAssetIds = [];
+let linkedCalendarEvent = null;
+const WEEKDAY_SHORT = { MO: 'Lun', TU: 'Mar', WE: 'Mer', TH: 'Gio', FR: 'Ven', SA: 'Sab', SU: 'Dom' };
+const PUBLICATION_LABELS = { SCHEDULED: 'In coda', PUBLISHED: 'Pubblicato', FAILED: 'Non riuscito', CANCELLED: 'Annullato' };
 const $ = id => document.getElementById(id);
 
 function renderTodayDate() {
@@ -70,6 +77,8 @@ function calendarPrompt() {
 async function initializeAuth() {
   const response = await fetch('/api/config');
   const config = await response.json();
+  appConfig = config;
+  renderPublicationNote();
   if (!config.supabase_url || !config.supabase_anon_key || !window.supabase) {
     $('auth-status').textContent = 'Login non configurato';
     return;
@@ -97,8 +106,8 @@ function switchView(view) {
   document.querySelectorAll('.view').forEach(element => element.classList.toggle('active', element.id === `view-${view}`));
   document.querySelectorAll('.nav-btn').forEach(element => element.classList.toggle('active', element.dataset.view === view));
   if (view === 'today') loadHome();
-  if (view === 'opportunities') { loadOpportunities('opportunity-list'); loadCalendarMonth(); }
-  if (view === 'content') loadContent();
+  if (view === 'opportunities') { loadOpportunities('opportunity-list'); loadCalendarMonth(); loadEditorialSuggestions(); loadEditorialPlans(); }
+  if (view === 'content') { loadContent(); loadPublications(); }
   if (view === 'performance') loadAnalytics();
 }
 function status(id, message, type = '') { const element = $(id); element.textContent = message; element.className = `status-msg ${type}`; }
@@ -448,6 +457,355 @@ function setupCalendarShell() {
   removeSelected.addEventListener('click', deleteSelectedCalendarEvents);
   newSeries.addEventListener('click', () => openCalendarPlanner(new Date()));
 }
+/* --------------------------------------------------------- piano editoriale */
+/*
+ * Il reminder nasce dai fatti: se lo stesso giorno della settimana ha riunioni
+ * in almeno 3 settimane diverse (vedi backend/services/editorial.py) l'utente
+ * ha già un ritmo di lavoro. Mostriamo il punto esclamativo in sidebar e una
+ * scheda che offre di trasformare quel ritmo in un piano editoriale.
+ */
+
+const PLAN_WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+const DISMISS_KEY = 'moment.editorial.dismissed';
+
+function shiftWeekdayCode(code, delta) {
+  const index = PLAN_WEEKDAYS.indexOf(code);
+  if (index === -1) return code;
+  return PLAN_WEEKDAYS[(index + delta + PLAN_WEEKDAYS.length) % PLAN_WEEKDAYS.length];
+}
+
+function planWeekdayList(codes) {
+  return (codes || []).map(code => WEEKDAY_SHORT[code] || code).join(', ');
+}
+
+/* La settimana in corso ha già giorni alle spalle: il piano parte da quella dopo. */
+function planStartSuggestion(reference = new Date()) {
+  const monday = weekStart(reference);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (monday < today) monday.setDate(monday.getDate() + 7);
+  return monday;
+}
+
+/*
+ * Convertire un suggerimento non deve duplicare le riunioni già in calendario:
+ * il piano riparte dalla settimana successiva all'ultima ricorrenza osservata.
+ */
+function planStartAfterSuggestion(suggestion) {
+  const weeks = (suggestion.weeks || []).filter(Boolean).sort();
+  const earliest = planStartSuggestion();
+  if (!weeks.length) return earliest;
+  const start = new Date(`${weeks[weeks.length - 1]}T00:00:00`);
+  start.setDate(start.getDate() + 7);
+  return start < earliest ? earliest : start;
+}
+
+/* I titoli arrivano da Google Calendar: si ripulisce il prefisso delle nostre serie. */
+function planTopicFromTitles(titles) {
+  const first = (titles || []).find(title => title && title.trim());
+  if (!first) return '';
+  return first.trim().replace(/^(post|riunione)\s·\s/i, '');
+}
+
+function suggestionKey(item) {
+  return `${item.weekday}-${item.hour}-${(item.weeks || []).join('_')}`;
+}
+
+function dismissedSuggestions() {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(DISMISS_KEY) || '[]');
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function isSuggestionDismissed(item) {
+  return dismissedSuggestions().includes(suggestionKey(item));
+}
+
+function dismissSuggestion(item) {
+  window.localStorage.setItem(DISMISS_KEY, JSON.stringify([...new Set([...dismissedSuggestions(), suggestionKey(item)])]));
+  renderEditorialSuggestions();
+}
+
+function updateEditorialBadge() {
+  const badge = $('nav-badge-editorial');
+  if (!badge) return;
+  const pending = editorialSuggestions.filter(item => !isSuggestionDismissed(item));
+  badge.classList.toggle('hidden', !pending.length);
+  if (pending.length) badge.title = pending[0].message;
+}
+
+function renderSuggestionCard(item) {
+  const card = document.createElement('article');
+  card.className = 'suggestion-card';
+
+  const mark = document.createElement('span');
+  mark.className = 'suggestion-mark';
+  mark.setAttribute('aria-hidden', 'true');
+  mark.textContent = '!';
+
+  const body = document.createElement('div');
+  body.className = 'suggestion-body';
+
+  const step = document.createElement('span');
+  step.className = 'step';
+  step.textContent = 'Promemoria ritmo ricorrente';
+  const heading = document.createElement('h3');
+  heading.textContent = `${item.weekday_label} alle ${String(item.hour).padStart(2, '0')}:00 ti ripeti`;
+  const message = document.createElement('p');
+  message.textContent = item.message;
+  body.append(step, heading, message);
+
+  // Il piano proposto: la riunione resta il giorno osservato, il post esce il giorno dopo.
+  const postDay = shiftWeekdayCode(item.weekday, 1);
+  const start = planStartAfterSuggestion(item);
+  const meta = document.createElement('div');
+  meta.className = 'suggestion-meta';
+  [
+    `${item.occurrences} ricorrenze in ${item.weeks.length} settimane`,
+    `riunioni ${WEEKDAY_SHORT[item.weekday] || item.weekday}`,
+    `post ${WEEKDAY_SHORT[postDay] || postDay}`,
+    `dal ${start.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`,
+  ].forEach(text => {
+    const pill = document.createElement('span');
+    pill.className = 'status-pill';
+    pill.textContent = text;
+    meta.appendChild(pill);
+  });
+
+  const note = document.createElement('p');
+  note.className = 'suggestion-note';
+  note.textContent = 'Le riunioni già in calendario non vengono toccate: il piano crea le serie successive.';
+  body.append(meta, note);
+
+  if (item.titles?.length) {
+    const list = document.createElement('ul');
+    list.className = 'suggestion-titles';
+    item.titles.forEach(title => {
+      const entry = document.createElement('li');
+      entry.textContent = title;
+      list.appendChild(entry);
+    });
+    body.appendChild(list);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'suggestion-actions';
+  const accept = document.createElement('button');
+  accept.type = 'button';
+  accept.className = 'btn btn-primary';
+  accept.textContent = 'Crea il piano editoriale';
+  accept.addEventListener('click', () => openEditorialPanel({ suggestion: item, postDay }));
+  const later = document.createElement('button');
+  later.type = 'button';
+  later.className = 'text-button';
+  later.textContent = 'Non ora';
+  later.addEventListener('click', () => dismissSuggestion(item));
+  actions.append(accept, later);
+  body.appendChild(actions);
+
+  card.append(mark, body);
+  return card;
+}
+
+function renderEditorialSuggestions() {
+  updateEditorialBadge();
+  const container = $('editorial-suggestions');
+  if (!container) return;
+  container.replaceChildren();
+  const pending = editorialSuggestions.filter(item => !isSuggestionDismissed(item));
+  if (!pending.length) {
+    container.classList.add('hidden');
+    return;
+  }
+  pending.forEach(item => container.appendChild(renderSuggestionCard(item)));
+  container.classList.remove('hidden');
+}
+
+/*
+ * Un calendario non leggibile non è un errore da urlare all'utente: il reminder
+ * semplicemente non compare. La vista Opportunities mostra già il suo stato.
+ */
+async function loadEditorialSuggestions() {
+  try {
+    const response = await fetch('/api/editorial/suggestions', { headers: await authHeaders() });
+    const data = await readResponse(response);
+    if (!response.ok) throw new Error(data.detail || 'Suggerimenti non disponibili.');
+    editorialSuggestions = Array.isArray(data) ? data : [];
+  } catch {
+    editorialSuggestions = [];
+  }
+  renderEditorialSuggestions();
+}
+
+function openEditorialPanel({ suggestion, postDay } = {}) {
+  const panel = $('editorial-plan-panel');
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  if (!$('plan-start').value) $('plan-start').value = calendarDateKey(planStartSuggestion());
+  if (suggestion) {
+    $('plan-topic').value = planTopicFromTitles(suggestion.titles) || '';
+    $('plan-start').value = calendarDateKey(planStartAfterSuggestion(suggestion));
+    document.querySelectorAll('input[name="plan-post-day"]').forEach(input => { input.checked = input.value === postDay; });
+    $('plan-meeting-time').value = `${String(suggestion.hour).padStart(2, '0')}:00`;
+  }
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function submitEditorialPlan(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const days = [...form.querySelectorAll('input[name="plan-post-day"]:checked')].map(input => input.value);
+  if (!days.length) return status('editorial-plan-status', 'Seleziona almeno un giorno per i post.', 'error');
+  const payload = {
+    topic: $('plan-topic').value.trim(), content_format: $('plan-format').value,
+    start_date: $('plan-start').value, weeks: Number($('plan-weeks').value),
+    frequency: $('plan-frequency').value, post_days: days,
+    post_time: $('plan-post-time').value, post_duration_minutes: Number($('plan-post-duration').value),
+    meeting_shift_days: Number($('plan-meeting-shift').value), meeting_time: $('plan-meeting-time').value,
+    meeting_duration_minutes: Number($('plan-meeting-duration').value), notes: $('plan-notes').value.trim(),
+  };
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  status('editorial-plan-status', 'Creo le serie di post e riunioni su Google Calendar…', 'loading');
+  try {
+    const response = await fetch('/api/editorial/plans', { method: 'POST', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await readResponse(response);
+    if (!response.ok) throw new Error(data.detail || 'Creazione del piano non riuscita.');
+    form.reset();
+    $('plan-start').value = calendarDateKey(planStartSuggestion());
+    status('editorial-plan-status', `Piano creato: ${data.posts_planned} post e ${data.meetings_planned} riunioni.`, 'success');
+    await Promise.all([loadEditorialPlans(), loadCalendarMonth(), loadEditorialSuggestions()]);
+  } catch (error) {
+    status('editorial-plan-status', error.message, 'error');
+  } finally { button.disabled = false; }
+}
+
+function renderEditorialPlan(plan) {
+  const card = document.createElement('article');
+  card.className = 'plan-row';
+  const details = document.createElement('div');
+  const title = document.createElement('h3'); title.textContent = plan.topic;
+  const summary = document.createElement('p');
+  summary.textContent = `${plan.posts_planned} post · ${plan.meetings_planned} riunioni · ${plan.weeks} settimane · ${planWeekdayList(plan.post_days)}`;
+  details.append(title, summary);
+  const actions = document.createElement('div'); actions.className = 'plan-actions';
+  const link = document.createElement('a'); link.className = 'text-button'; link.textContent = 'Apri Calendar';
+  link.href = plan.post_event_link || plan.meeting_event_link || '#'; link.target = '_blank'; link.rel = 'noopener noreferrer';
+  if (!plan.post_event_link && !plan.meeting_event_link) link.hidden = true;
+  const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-button danger-text'; remove.textContent = 'Elimina';
+  remove.addEventListener('click', () => deleteEditorialPlan(plan));
+  actions.append(link, remove); card.append(details, actions); return card;
+}
+
+async function loadEditorialPlans() {
+  const container = $('editorial-plan-list'); if (!container) return;
+  try {
+    const response = await fetch('/api/editorial/plans', { headers: await authHeaders() });
+    const data = await readResponse(response);
+    if (!response.ok) throw new Error(data.detail || 'Piani non disponibili.');
+    container.replaceChildren();
+    if (!data.length) container.appendChild(emptyState('Nessun piano editoriale', 'Crea un piano per programmare post e riunioni ricorrenti.'));
+    else data.forEach(plan => container.appendChild(renderEditorialPlan(plan)));
+  } catch (error) { container.replaceChildren(emptyState('Piani non disponibili', error.message)); }
+}
+
+async function deleteEditorialPlan(plan) {
+  if (!window.confirm(`Eliminare il piano “${plan.topic}” e le relative serie dal calendario?`)) return;
+  try {
+    const response = await fetch(`/api/editorial/plans/${encodeURIComponent(plan.id)}`, { method: 'DELETE', headers: await authHeaders() });
+    const data = await readResponse(response);
+    if (!response.ok) throw new Error(data.detail || 'Eliminazione non riuscita.');
+    status('editorial-plan-status', 'Piano e serie eliminate.', 'success');
+    await Promise.all([loadEditorialPlans(), loadCalendarMonth(), loadEditorialSuggestions()]);
+  } catch (error) { status('editorial-plan-status', error.message, 'error'); }
+}
+
+function renderPublicationNote() {
+  const note = $('publication-note'); if (!note) return;
+  // Il processore manuale è solo per lo sviluppo locale; in produzione lo chiama il cron.
+  const runButton = $('run-publications');
+  if (runButton) runButton.classList.toggle('hidden', Boolean(appConfig.supabase_url));
+  note.textContent = appConfig.scheduler_configured
+    ? 'La coda verrà elaborata automaticamente all’orario programmato.'
+    : 'La coda è salvata; configura CRON_SECRET e uno scheduler per pubblicare automaticamente.';
+}
+
+async function loadPublications() {
+  const container = $('publication-list'); if (!container) return;
+  try {
+    const response = await fetch('/api/publications', { headers: await authHeaders() });
+    const data = await readResponse(response);
+    if (!response.ok) throw new Error(data.detail || 'Coda di pubblicazione non disponibile.');
+    container.replaceChildren();
+    if (!data.length) { container.appendChild(emptyState('La coda è vuota', 'I post programmati compariranno qui.')); return; }
+    data.forEach(item => {
+      const row = document.createElement('article'); row.className = 'publication-row';
+      const main = document.createElement('div'); main.className = 'publication-main';
+      const caption = document.createElement('strong'); caption.textContent = item.caption || item.calendar_event_title || 'Post senza didascalia';
+      const date = document.createElement('span'); date.textContent = new Date(item.scheduled_at).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' });
+      main.append(caption, date);
+      const state = document.createElement('span'); state.className = `status-pill publication-${item.status.toLowerCase()}`; state.textContent = PUBLICATION_LABELS[item.status] || item.status;
+      row.append(main, state);
+      if (item.status === 'SCHEDULED') {
+        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'text-button danger-text'; cancel.textContent = 'Annulla';
+        cancel.addEventListener('click', () => cancelPublication(item.id)); row.appendChild(cancel);
+      }
+      if (item.error) { const error = document.createElement('p'); error.className = 'publication-error'; error.textContent = item.error; row.appendChild(error); }
+      container.appendChild(row);
+    });
+  } catch (error) { container.replaceChildren(emptyState('Coda non disponibile', error.message)); }
+}
+
+async function schedulePublication(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const files = Array.from($('publication-input').files || []);
+  if (!files.length && !pendingAssetIds.length) return status('publication-status', 'Carica almeno un’immagine.', 'error');
+  const when = $('publication-date').value;
+  if (!when || Number.isNaN(new Date(when).getTime())) return status('publication-status', 'Indica data e ora valide.', 'error');
+  const body = new FormData();
+  files.forEach(file => body.append('files', file));
+  if (pendingAssetIds.length) body.append('asset_ids', pendingAssetIds.join(','));
+  body.append('caption', $('publication-caption').value.trim());
+  body.append('scheduled_at', new Date(when).toISOString());
+  if (linkedCalendarEvent) { body.append('calendar_event_id', linkedCalendarEvent.id); body.append('calendar_event_title', linkedCalendarEvent.title); }
+  const button = form.querySelector('[type="submit"]'); button.disabled = true;
+  status('publication-status', 'Salvo il post in coda…', 'loading');
+  try {
+    const response = await fetch('/api/publications', { method: 'POST', headers: await authHeaders(), body });
+    const data = await readResponse(response);
+    if (!response.ok) throw new Error(data.detail || 'Programmazione non riuscita.');
+    form.reset(); pendingAssetIds = []; linkedCalendarEvent = null;
+    $('publication-preview').replaceChildren(); $('publication-event-group').classList.add('hidden');
+    $('publication-assets-group').classList.add('hidden');
+    status('publication-status', 'Post aggiunto alla coda di pubblicazione.', 'success'); await loadPublications();
+  } catch (error) { status('publication-status', error.message, 'error'); }
+  finally { button.disabled = false; }
+}
+
+async function cancelPublication(id) {
+  try {
+    const response = await fetch(`/api/publications/${encodeURIComponent(id)}`, { method: 'DELETE', headers: await authHeaders() });
+    const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Annullamento non riuscito.');
+    await loadPublications();
+  } catch (error) { status('publication-status', error.message, 'error'); }
+}
+
+async function runPublications() {
+  const button = $('run-publications'); button.disabled = true;
+  try {
+    const response = await fetch('/api/publications/run', { method: 'POST', headers: await authHeaders() });
+    const data = await readResponse(response); if (!response.ok) throw new Error(data.detail || 'Elaborazione coda non riuscita.');
+    status('publication-status', `${data.published} pubblicati, ${data.failed} non riusciti.`, data.failed ? 'error' : 'success');
+    await loadPublications();
+  } catch (error) { status('publication-status', error.message, 'error'); }
+  finally { button.disabled = false; }
+}
+
+
 async function connectMeta() { if (!supabaseClient) return status('workspace-status', 'Accedi prima con Google.', 'error'); const { data: { session } } = await supabaseClient.auth.getSession(); if (!session) return status('workspace-status', 'Accedi prima con Google.', 'error'); const response = await fetch('/api/auth/meta/start', { headers: { Authorization: `Bearer ${session.access_token}` } }); const data = await response.json(); if (!response.ok) return status('workspace-status', data.detail || 'Meta non configurato.', 'error'); window.location.href = data.url; }
 async function authHeaders() {
   if (!supabaseClient) return {};
@@ -498,9 +856,24 @@ $('copy-form').addEventListener('submit', generateCopy);
 $('google-connect').addEventListener('click', connectGoogle);
 $('calendar-schedule-form').addEventListener('submit', scheduleCalendarEvent);
 $('close-calendar-planner')?.addEventListener('click', () => $('calendar-planner').classList.add('hidden'));
+$('open-editorial-panel')?.addEventListener('click', () => openEditorialPanel());
+$('close-editorial-panel')?.addEventListener('click', () => $('editorial-plan-panel').classList.add('hidden'));
+$('editorial-plan-form')?.addEventListener('submit', submitEditorialPlan);
+$('publication-form')?.addEventListener('submit', schedulePublication);
+$('publication-input')?.addEventListener('change', event => {
+  const container = $('publication-preview'); container.replaceChildren();
+  Array.from(event.target.files || []).forEach(file => {
+    const image = document.createElement('img'); image.className = 'publication-preview-image';
+    image.src = URL.createObjectURL(file); image.alt = file.name; container.appendChild(image);
+  });
+});
+$('clear-publication-event')?.addEventListener('click', () => { linkedCalendarEvent = null; $('publication-event-group').classList.add('hidden'); });
+$('clear-publication-assets')?.addEventListener('click', () => { pendingAssetIds = []; $('publication-assets-group').classList.add('hidden'); });
+$('run-publications')?.addEventListener('click', runPublications);
+$('refresh-publications')?.addEventListener('click', loadPublications);
 $('refresh-content').addEventListener('click', loadContent);
 $('refresh-analytics').addEventListener('click', loadAnalytics);
 $('login-google').addEventListener('click', loginWithGoogle);
 $('meta-connect').addEventListener('click', connectMeta);
 $('logout').addEventListener('click', logout);
-window.addEventListener('DOMContentLoaded', async () => { setupCalendarShell(); initSidebar(); tuneCharts(); renderTodayDate(); await initializeAuth(); const opportunities = $('view-opportunities'); if (opportunities?.classList.contains('active')) loadCalendarMonth(); loadHome(); });
+window.addEventListener('DOMContentLoaded', async () => { setupCalendarShell(); initSidebar(); tuneCharts(); renderTodayDate(); if ($('plan-start')) $('plan-start').value = calendarDateKey(planStartSuggestion()); await initializeAuth(); const opportunities = $('view-opportunities'); if (opportunities?.classList.contains('active')) { loadCalendarMonth(); loadEditorialSuggestions(); loadEditorialPlans(); } loadHome(); });

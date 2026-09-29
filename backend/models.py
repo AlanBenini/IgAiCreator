@@ -103,3 +103,74 @@ class CalendarUpdateRequest(BaseModel):
 class GoogleTokenRequest(BaseModel):
     access_token: str
     refresh_token: str = ""
+
+
+class MeetingSuggestion(BaseModel):
+    """Riunioni ripetute nello stesso giorno in settimane diverse: possibile piano editoriale."""
+    weekday: str
+    weekday_label: str
+    hour: int
+    occurrences: int
+    weeks: List[str] = []
+    titles: List[str] = []
+    message: str
+
+
+class EditorialPlanRequest(BaseModel):
+    topic: str
+    content_format: str = "instagram_post"
+    start_date: str
+    weeks: int = 4
+    frequency: str = "weekly"
+    post_days: List[str] = []
+    post_time: str = "10:00"
+    post_duration_minutes: int = 30
+    meeting_shift_days: int = 0
+    meeting_time: str = "09:00"
+    meeting_duration_minutes: int = 60
+    notes: str = ""
+
+
+class EditorialPlan(BaseModel):
+    id: str
+    topic: str
+    content_format: str
+    start_date: str
+    weeks: int
+    frequency: str
+    post_days: List[str]
+    post_time: str
+    post_duration_minutes: int
+    meeting_days: List[str]
+    meeting_time: str
+    meeting_duration_minutes: int
+    notes: str = ""
+    posts_planned: int
+    meetings_planned: int
+    post_event_id: Optional[str] = None
+    post_event_link: Optional[str] = None
+    meeting_event_id: Optional[str] = None
+    meeting_event_link: Optional[str] = None
+    created_at: str
+
+
+class ScheduledPost(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+    caption: str
+    asset_ids: List[str]
+    scheduled_at: str
+    status: str = "SCHEDULED"
+    calendar_event_id: Optional[str] = None
+    calendar_event_title: Optional[str] = None
+    created_at: str
+    published_at: Optional[str] = None
+    platform_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class PublicationRunResult(BaseModel):
+    due: int
+    published: int
+    failed: int
+    results: List[ScheduledPost] = []

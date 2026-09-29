@@ -43,6 +43,12 @@ META_REDIRECT_URI = os.getenv(
 ).strip().strip('"')
 SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()
 
+# Segreto condiviso con lo scheduler esterno (cron di Vercel, GitHub Actions o
+# altro): protegge /api/publications/run, che pubblica davvero su Instagram.
+# Se non è configurato l'endpoint resta chiuso in produzione e aperto solo in
+# sviluppo locale, dove non c'è nulla da proteggere.
+CRON_SECRET = os.getenv("CRON_SECRET", "").strip()
+
 API_VERSION = "v21.0"
 GRAPH_BASE_URL = f"https://graph.facebook.com/{API_VERSION}"
 

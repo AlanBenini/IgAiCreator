@@ -297,6 +297,24 @@ input::placeholder, textarea::placeholder { color: var(--text-subtle); }
 .day-options label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hover); }
 .schedule-options > .btn { align-self: flex-start; margin-top: auto; }
 
+/* Piani e pubblicazioni: righe compatte, coerenti con la coda contenuti. */
+.plan-list, .publication-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.plan-row, .publication-row { display: flex; align-items: center; gap: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 12px 14px; }
+.plan-row > div:first-child, .publication-main { min-width: 0; flex: 1; }
+.plan-row h3 { margin: 0 0 3px; font-size: var(--fs-base); }
+.plan-row p { margin: 0; color: var(--text-muted); font-size: var(--fs-sm); }
+.plan-actions { display: flex; align-items: center; gap: 12px; }
+.danger-text { color: var(--danger); }
+.publication-main { display: flex; flex-direction: column; gap: 4px; }
+.publication-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.publication-main span, .publication-error { color: var(--text-muted); font-size: var(--fs-xs); }
+.publication-error { grid-column: 1 / -1; margin: 0; color: var(--danger); }
+.publication-preview-image { width: 60px; height: 60px; border-radius: var(--radius-sm); object-fit: cover; }
+.publication-row { flex-wrap: wrap; }
+.publication-scheduled { background: var(--accent-soft); color: var(--accent-hover); }
+.publication-published { background: var(--success-soft); color: var(--success); }
+.publication-failed { background: var(--danger-soft); color: var(--danger); }
+
 .calendar-shell { margin-bottom: 12px; }
 .calendar-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
 .calendar-nav { display: flex; align-items: center; gap: 4px; }
@@ -397,5 +415,8 @@ input::placeholder, textarea::placeholder { color: var(--text-subtle); }
   .calendar-actions { width: 100%; margin-left: 0; }
   .calendar-actions .btn { flex: 1; }
   .calendar-week-grid { max-height: 60vh; }
+  .plan-row, .publication-row { align-items: flex-start; }
+  .plan-row { flex-direction: column; }
+  .plan-actions { width: 100%; justify-content: flex-end; }
 }
 

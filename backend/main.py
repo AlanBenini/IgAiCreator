@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import time
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import requests
@@ -13,14 +14,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from backend.config import BASE_DIR, CORS_ORIGINS, STORAGE_DIR
-from backend.models import AnalyticsSummary, AssetRecord, CalendarBulkDeleteRequest, CalendarEventRequest, CalendarEventResponse, CalendarScheduleRequest, CalendarUpdateRequest, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, GoogleTokenRequest, Opportunity
+from backend.models import AnalyticsSummary, AssetRecord, CalendarBulkDeleteRequest, CalendarEventRequest, CalendarEventResponse, CalendarScheduleRequest, CalendarUpdateRequest, ContentDraft, ContentPublishResponse, ContentStatusRequest, CopyGenerationResponse, EditorialPlan, EditorialPlanRequest, GoogleTokenRequest, MeetingSuggestion, Opportunity, PublicationRunResult, ScheduledPost
 from backend.services.assets import asset_public_url, list_assets, save_uploads
 from backend.services.analytics import calculate_analytics
 from backend.services.copywriter import generate_copies
 from backend.services.content import create_draft, list_drafts, update_status
+from backend.services.editorial import create_plan, delete_plan, detect_recurring_meetings, list_plans
+from backend.services.publications import cancel_publication, create_publication, list_publications, process_due
 from backend.services.radar import build_opportunities
 from backend.adapters.instagram import publish_photo
-from backend.config import META_APP_ID, META_APP_SECRET, META_REDIRECT_URI, SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, USE_MOCK
+from backend.config import CRON_SECRET, META_APP_ID, META_APP_SECRET, META_REDIRECT_URI, SESSION_SECRET, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL, USE_MOCK
 from backend.adapters.google_calendar import create_event, create_recurring_event, delete_event, delete_events, has_connection, list_events, save_provider_token, update_event
 
 app = FastAPI(title="Instagram Content Engine API", version="2.0.0")
@@ -65,6 +68,10 @@ def frontend_config():
         "supabase_anon_key": SUPABASE_ANON_KEY,
         "meta_app_id": META_APP_ID,
         "meta_redirect_uri": META_REDIRECT_URI,
+        # Su Vercel lo storage è /tmp: il frontend lo dice all'utente prima che
+        # programmi un post che non sopravvivrebbe al riavvio dell'istanza.
+        "storage_ephemeral": bool(os.getenv("VERCEL")),
+        "scheduler_configured": bool(CRON_SECRET),
     }
 
 
@@ -401,6 +408,118 @@ def calendar_recurring_event(event: CalendarScheduleRequest, request: Request):
     except (RuntimeError, requests.RequestException) as error:
         raise HTTPException(status_code=502, detail=f"Impossibile pianificare gli eventi: {error}") from error
     return CalendarEventResponse(id=created["id"], html_link=created.get("htmlLink"))
+
+
+# ------------------------------------------------- piano editoriale e coda post
+
+
+@app.get("/api/editorial/suggestions", response_model=list[MeetingSuggestion])
+def editorial_suggestions(request: Request):
+    """Riunioni ripetute nello stesso giorno in settimane diverse.
+
+    È il segnale che l'utente sta già lavorando a una cadenza: il frontend lo
+    mostra come promemoria e propone di convertirlo in un piano editoriale.
+    """
+    user_id = require_user(request)
+    if not user_id:
+        return []
+    now = datetime.now(timezone.utc)
+    try:
+        events = list_events(user_id, now.isoformat(), (now + timedelta(days=45)).isoformat())
+    except (RuntimeError, requests.RequestException) as error:
+        raise HTTPException(status_code=502, detail=f"Impossibile leggere il calendario: {error}") from error
+    return detect_recurring_meetings(events)
+
+
+@app.get("/api/editorial/plans", response_model=list[EditorialPlan])
+def get_editorial_plans(request: Request):
+    require_user(request)
+    return list_plans()
+
+
+@app.post("/api/editorial/plans", response_model=EditorialPlan)
+def create_editorial_plan(payload: EditorialPlanRequest, request: Request):
+    user_id = require_calendar_user(request)
+    try:
+        return create_plan(payload, user_id)
+    except HTTPException:
+        raise
+    except (RuntimeError, requests.RequestException) as error:
+        raise HTTPException(status_code=502, detail=f"Impossibile creare il piano editoriale: {error}") from error
+
+
+@app.delete("/api/editorial/plans/{plan_id}")
+def remove_editorial_plan(plan_id: str, request: Request):
+    user_id = require_calendar_user(request)
+    try:
+        delete_plan(plan_id, user_id)
+    except HTTPException:
+        raise
+    except (RuntimeError, requests.RequestException) as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"status": "deleted"}
+
+
+def _require_scheduler(request: Request) -> None:
+    """Il processore pubblica davvero: non resta mai aperto a chiunque.
+
+    - con CRON_SECRET configurato serve il Bearer condiviso con lo scheduler;
+    - senza CRON_SECRET in produzione l'endpoint è chiuso (503) invece di
+      esporre una pubblicazione libera;
+    - in sviluppo locale, senza Supabase, non c'è nulla da proteggere.
+    """
+    if CRON_SECRET:
+        if request.headers.get("authorization", "") == f"Bearer {CRON_SECRET}":
+            return
+        raise HTTPException(status_code=403, detail="Scheduler non autorizzato.")
+    if AUTH_REQUIRED:
+        raise HTTPException(status_code=503, detail="Configura CRON_SECRET per abilitare il processore delle pubblicazioni.")
+    return
+
+
+@app.get("/api/publications", response_model=list[ScheduledPost])
+def get_publications(request: Request):
+    return list_publications(require_user(request))
+
+
+@app.post("/api/publications", response_model=ScheduledPost)
+async def schedule_publication(
+    request: Request,
+    files: list[UploadFile] | None = File(default=None),
+    asset_ids: str = Form(default=""),
+    caption: str = Form(default=""),
+    scheduled_at: str = Form(...),
+    calendar_event_id: str = Form(default=""),
+    calendar_event_title: str = Form(default=""),
+):
+    """Programma un post: si caricano foto nuove oppure si riusano asset già presenti."""
+    user_id = require_user(request)
+    chosen = [item.strip() for item in asset_ids.split(",") if item.strip()]
+    if files:
+        chosen.extend(asset.id for asset in await save_uploads(files))
+    return create_publication(
+        caption,
+        chosen,
+        scheduled_at,
+        user_id=user_id,
+        calendar_event_id=calendar_event_id,
+        calendar_event_title=calendar_event_title,
+    )
+
+
+@app.delete("/api/publications/{publication_id}", response_model=ScheduledPost)
+def cancel_scheduled_publication(publication_id: str, request: Request):
+    require_user(request)
+    return cancel_publication(publication_id)
+
+
+# Doppio metodo: il cron di Vercel chiama in GET, l'app usa POST con "Esegui ora".
+@app.get("/api/publications/run", response_model=PublicationRunResult, include_in_schema=False)
+@app.post("/api/publications/run", response_model=PublicationRunResult)
+def run_scheduled_publications(request: Request):
+    """Pubblica le voci scadute. Chiamabile dallo scheduler o dall'app aperta."""
+    _require_scheduler(request)
+    return process_due()
 
 
 # Statici e media sono serviti dallo stesso processo locale.
