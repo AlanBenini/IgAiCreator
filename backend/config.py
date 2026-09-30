@@ -5,9 +5,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-# Vercel rende il filesystem del progetto non scrivibile; /tmp resta disponibile
-# per la durata dell'istanza serverless. In locale continuiamo a usare storage/.
+# Il filesystem Vercel non è persistente: /tmp vale solo per l'invocazione.
+# I media caricati usano Blob; in locale storage/ continua a usare il disco.
 STORAGE_DIR = Path("/tmp/moment-storage") if os.getenv("VERCEL") else BASE_DIR / "storage"
+VERCEL_RUNTIME = bool(os.getenv("VERCEL"))
+BLOB_READ_WRITE_TOKEN = os.getenv("BLOB_READ_WRITE_TOKEN", "").strip()
+BLOB_STORE_ID = os.getenv("BLOB_STORE_ID", "").strip()
 MEDIA_DIR = STORAGE_DIR / "media"
 EXPORTS_DIR = STORAGE_DIR / "exports"
 

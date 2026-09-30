@@ -10,7 +10,8 @@ from backend.services.assets import get_asset_files
 
 
 def _image_part(path, mime_type: str) -> dict:
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    image_bytes = path if isinstance(path, bytes) else path.read_bytes()
+    encoded = base64.b64encode(image_bytes).decode("ascii")
     return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}
 
 

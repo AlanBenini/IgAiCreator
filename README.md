@@ -33,6 +33,7 @@ Senza `SUPABASE_URL` e `SUPABASE_ANON_KEY` il workspace parte in **modalità loc
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | vuoti | Rinnovo del token Google Calendar |
 | `ACCESS_TOKEN` / `IG_USER_ID` | vuoti | Fallback token Meta globale, usato quando l'utente non ha un collegamento personale |
 | `PUBLIC_BASE_URL` | derivato da Vercel | URL pubblico usato per consegnare le immagini a Meta in fase di pubblicazione |
+| `BLOB_READ_WRITE_TOKEN` / `BLOB_STORE_ID` | forniti collegando Vercel Blob | Salvataggio persistente dei media caricati. Lo store deve essere pubblico per mostrare le immagini e consentire a Meta di scaricarle |
 | `MAX_UPLOADS` / `MAX_UPLOAD_BYTES` | `20` / `10 MB` | Limiti degli upload del Content Studio |
 | `INSIGHTS_CACHE_TTL` | `21600` | Secondi di validità della cache degli insights Meta |
 | `CORS_ORIGINS` | vuoto (nessuna origine esterna) | Lista separata da virgole, solo se il frontend è su un altro dominio |
@@ -72,7 +73,7 @@ La suite usa solo la standard library: nessuna rete, nessuna credenziale, cartel
 
 ## Limiti noti
 
-- **Storage effimero su Vercel**: `backend/config.py` sposta `storage/` in `/tmp`; upload, bozze (`content_library.json`) e media non sopravvivono tra invocazioni. In locale il filesystem persiste, quindi la modalità supportata oggi è quella locale.
+- **Stato applicativo effimero su Vercel**: i media caricati vanno in Vercel Blob; bozze (`content_library.json`) e coda pubblicazioni restano in `/tmp` e non sopravvivono in modo affidabile tra invocazioni. Per usare le immagini su Vercel, crea uno store Blob pubblico in Storage e collegalo al progetto; Vercel fornisce `BLOB_STORE_ID` e le credenziali al runtime.
 - **Modalità demo attiva**: con `USE_MOCK=True` (default) analytics e publishing usano i dati demo, non l'account reale.
 - Il frontend non ha build né bundler: gli script sono caricati da CDN (Chart.js, supabase-js).
 
